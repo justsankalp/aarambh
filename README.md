@@ -82,8 +82,8 @@ and offline: notes written offline are sent when you're back online.
   one (step 6) and paste it in Settings.
 - **The app forgot my settings.** iOS can clear a site's storage. Your notes
   are safe in the repository: open Settings, tap *Paste* for the token and
-  pick your name. Anything still waiting to send stays queued on the device
-  and goes out once you're connected.
+  pick your name. (A note written offline and not yet sent when the storage
+  was cleared is lost with it, so open the app online now and then.)
 - **No suggested links on the Map.** Check the repository's *Actions* tab: the
   *Judge* run for your push should be green. A yellow warning about
   `GEMINI_API_KEY` means the secret is missing. A "rate limited" warning means
