@@ -5,13 +5,14 @@ use aarambh_core::sync::{MAX_RETRIES, RepoRef, backoff_ms, commit_message};
 use aarambh_core::{Day, Event, append_to_day_file};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use leptos::prelude::window;
+use leptos::prelude::{set_timeout_with_handle, window};
 use serde::Deserialize;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Request, RequestCache, RequestInit, RequestMode, Response};
 
 const API_VERSION: &str = "2026-03-10";
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GhError {
@@ -145,11 +146,20 @@ impl Gh {
             init.set_body(&JsValue::from_str(b));
         }
         init.set_headers(&headers);
+        // A request that hangs on a dead mobile connection would otherwise
+        // block syncing forever; give up and treat it as offline.
+        let abort = web_sys::AbortController::new().map_err(|_| GhError::Network)?;
+        init.set_signal(Some(&abort.signal()));
+        let timer = set_timeout_with_handle(move || abort.abort(), REQUEST_TIMEOUT).ok();
         let req = Request::new_with_str_and_init(url, &init).map_err(|_| GhError::Network)?;
-        let resp: Response = JsFuture::from(window().fetch_with_request(&req))
-            .await
-            .map_err(|_| GhError::Network)?
-            .unchecked_into();
+        let resp = JsFuture::from(window().fetch_with_request(&req)).await;
+        let resp: Response = match resp {
+            Ok(r) => r.unchecked_into(),
+            Err(_) => {
+                timer.inspect(|t| t.clear());
+                return Err(GhError::Network);
+            }
+        };
         let h = resp.headers();
         let text_promise = resp.text().map_err(|_| GhError::Network)?;
         let body = JsFuture::from(text_promise)
@@ -157,6 +167,7 @@ impl Gh {
             .map_err(|_| GhError::Network)?
             .as_string()
             .unwrap_or_default();
+        timer.inspect(|t| t.clear());
         Ok(Resp {
             status: resp.status(),
             etag: h.get("etag").ok().flatten(),

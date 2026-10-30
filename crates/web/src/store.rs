@@ -142,10 +142,11 @@ impl Store {
         }
     }
 
-    /// Refresh, then flush anything queued.
+    /// Sends queued posts first (what the person is waiting on), then
+    /// refreshes.
     pub async fn sync(self) {
-        self.refresh().await;
         self.flush().await;
+        self.refresh().await;
     }
 
     pub fn sync_soon(self) {
