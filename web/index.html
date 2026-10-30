@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>aarambh</title>
+    <meta name="description" content="A shared notebook for ideas, beliefs, questions and evidence." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#F4F1EA" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="aarambh" />
+    <!-- Runs before anything paints: picks the theme so there is no flash,
+         keeps following the system setting, and registers the service worker. -->
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var dark = window.matchMedia("(prefers-color-scheme: dark)");
+        function apply() {
+          var pref = null;
+          try { pref = localStorage.getItem("aarambh.theme"); } catch (e) {}
+          var theme = pref === "light" || pref === "dark" ? pref : dark.matches ? "dark" : "light";
+          root.setAttribute("data-theme", theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "dark" ? "#121614" : "#F4F1EA");
+        }
+        apply();
+        if (dark.addEventListener) dark.addEventListener("change", apply);
+        else dark.addListener(apply);
+        window.addEventListener("storage", apply);
+        window.aarambhApplyTheme = apply;
+      })();
+    </script>
+    <link data-trunk rel="css" href="theme.css" />
+    <link data-trunk rel="rust" href="../crates/web/Cargo.toml" data-bin="aarambh-web" data-wasm-opt="z" />
+  </head>
+  <body>
+    <div id="boot" class="boot" aria-hidden="true">
+      <header class="top"><span class="brand">aarambh</span></header>
+    </div>
+    <noscript><p class="boot-msg">aarambh needs JavaScript and WebAssembly to run.</p></noscript>
+  </body>
+</html>

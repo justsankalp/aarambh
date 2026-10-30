@@ -1,0 +1,430 @@
+/* aarambh theme. Every colour is a variable; the inline script in index.html
+   sets data-theme="light|dark" on <html> before first paint. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --card: #fbf9f4;
+  --ink: #2b2d28;
+  --muted: #646859;
+  --line: #e2ddd0;
+  --sage: #4f7059;
+  --amber: #c98a3b; /* fills only: 2.6:1 on bg, too light for text or outlines */
+  --amber-ink: #8f6224; /* text and dot rings: 4.7:1 on bg */
+  --clay: #a3472f;
+  --on-sage: #ffffff;
+  --sage-soft: rgba(79, 112, 89, 0.12);
+  --shadow: 0 1px 2px rgba(43, 45, 40, 0.06), 0 6px 20px rgba(43, 45, 40, 0.06);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121614;
+  --card: #1a1f1c;
+  --ink: #e7e5dd;
+  --muted: #98a091;
+  --line: #2a312c;
+  --sage: #8db599;
+  --amber: #e2a85b;
+  --amber-ink: #e2a85b;
+  --clay: #e08a74;
+  --on-sage: #121614; /* white on this sage is only 2.3:1 */
+  --sage-soft: rgba(141, 181, 153, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+:root {
+  --serif: ui-serif, "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --radius: 14px;
+  --tap: 44px;
+  --ease: 150ms ease;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --tabbar-h: 56px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16.5px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: var(--sage);
+}
+
+:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- Frame ------------------------------------------------------------ */
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: calc(52px + var(--safe-top));
+  padding: var(--safe-top) calc(12px + var(--safe-right)) 0 calc(20px + var(--safe-left));
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  margin: 0;
+  font: 500 19px/1 var(--serif);
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.screen {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 20px calc(20px + var(--safe-right)) calc(var(--tabbar-h) + var(--safe-bottom) + 96px)
+    calc(20px + var(--safe-left));
+}
+
+.tabs {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px calc(8px + var(--safe-right)) var(--safe-bottom) calc(8px + var(--safe-left));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+.tab {
+  position: relative;
+  flex: 0 1 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tabbar-h);
+  min-width: var(--tap);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: none;
+  transition: color var(--ease), background-color var(--ease);
+}
+
+.tab[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  bottom: 7px;
+  left: calc(50% - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--ease), background-color var(--ease);
+}
+
+.icon-btn:hover,
+.icon-btn[aria-current="page"] {
+  color: var(--ink);
+  background: var(--sage-soft);
+}
+
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---- Content ---------------------------------------------------------- */
+
+h2 {
+  margin: 0 0 4px;
+  font: 600 22px/1.3 var(--sans);
+}
+
+.lede {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+
+.stack > * + * {
+  margin-top: 12px;
+}
+
+.note-text {
+  margin: 6px 0 0;
+  font: 400 17px/1.55 var(--serif);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.kind {
+  color: var(--sage);
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.day-head {
+  margin: 28px 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.empty {
+  padding: 48px 8px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty p {
+  margin: 6px 0;
+}
+
+.sync-line {
+  min-height: 22px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.sync-line.error {
+  color: var(--clay);
+}
+
+/* ---- Forms ------------------------------------------------------------ */
+
+.field {
+  display: block;
+  margin-bottom: 18px;
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.field small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+input[type="text"],
+input[type="password"],
+textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  /* 16px+ stops iOS Safari zooming into focused inputs. */
+  font: 400 16.5px/1.4 var(--sans);
+  transition: border-color var(--ease);
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--sage);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: 500 16px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color var(--ease), border-color var(--ease), opacity var(--ease);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn.primary {
+  border-color: var(--sage);
+  background: var(--sage);
+  color: var(--on-sage);
+}
+
+.btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.btn.danger {
+  color: var(--clay);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+}
+
+.segmented button {
+  min-height: 38px;
+  min-width: 72px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 15px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color var(--ease), color var(--ease);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--sage);
+  color: var(--on-sage);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: 400 15px/1 var(--sans);
+  cursor: pointer;
+}
+
+.status-msg {
+  margin: 12px 0 0;
+  font-size: 15px;
+}
+
+.status-msg.ok {
+  color: var(--sage);
+}
+
+.status-msg.error {
+  color: var(--clay);
+}
+
+hr.soft {
+  margin: 28px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* ---- Boot placeholder (static HTML, shown until the app mounts) -------- */
+
+.boot-msg {
+  padding: 24px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,5 @@
+[build]
+target = "web/index.html"
+dist = "dist"
+# Relative URLs, so the same build works at sankalp.life/aarambh/ and locally.
+public_url = "./"
