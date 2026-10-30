@@ -520,6 +520,7 @@ pub fn render_block(d: &Draft, at: Timestamp) -> String {
     md.push_str("\n### Where you two diverge\n\n");
     if d.diverge.is_empty() {
         md.push_str(none);
+        md.push('\n');
     }
     for x in &d.diverge {
         let _ = writeln!(md, "**{}**\n", x.topic);
@@ -668,6 +669,11 @@ mod tests {
             })
             .collect();
         assert_eq!(headings.len(), 7, "{headings:#?}");
+        let empty = render_block(&Draft::default(), Timestamp(0));
+        assert!(
+            empty.contains("_Nothing this time._\n\n### Untested assumptions"),
+            "{empty}"
+        );
         assert!(doc.contains(&Block::Paragraph(vec![
             Inline::Text("Asha proposed ".into()),
             Inline::Emph(vec![Inline::Text("clinic".into())]),
