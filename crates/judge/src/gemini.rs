@@ -190,7 +190,13 @@ impl Judge for Gemini {
                 last = if status == 429 {
                     LlmError::RateLimited
                 } else {
-                    LlmError::Unavailable(format!("HTTP {status}"))
+                    let body = resp.text().await.unwrap_or_default();
+                    let msg = if body.trim().is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {}", error_message(&body))
+                    };
+                    LlmError::Unavailable(format!("HTTP {status}{msg}"))
                 };
                 continue;
             }
