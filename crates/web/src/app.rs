@@ -4,7 +4,8 @@
 use leptos::ev;
 use leptos::prelude::*;
 
-use crate::theme::ThemePicker;
+use crate::settings::{Settings, SettingsView};
+use crate::store::Store;
 use crate::util::location_hash;
 use crate::views::{DigestView, MapView, NotesView};
 
@@ -53,11 +54,39 @@ fn current(tab: RwSignal<Tab>, t: Tab) -> impl Fn() -> Option<&'static str> {
 
 #[component]
 pub fn App() -> impl IntoView {
+    let settings = RwSignal::new(Settings::load());
+    let store = Store::new(settings);
+    provide_context(store);
+    store.start();
+
+    // First run: go straight to settings.
+    if !settings.get_untracked().is_complete() && location_hash().is_empty() {
+        let _ = window().location().set_hash("settings");
+    }
     let tab = RwSignal::new(Tab::from_hash(&location_hash()));
-    let listener = window_event_listener(ev::hashchange, move |_| {
-        tab.set(Tab::from_hash(&location_hash()))
+    let listeners = [
+        window_event_listener(ev::hashchange, move |_| {
+            tab.set(Tab::from_hash(&location_hash()))
+        }),
+        window_event_listener(ev::online, move |_| store.sync_soon()),
+        window_event_listener(ev::focus, move |_| store.sync_soon()),
+    ];
+    // Poll gently while the app is open; an unchanged listing costs a 304.
+    let poll = set_interval_with_handle(
+        move || {
+            if document().visibility_state() == web_sys::VisibilityState::Visible {
+                store.sync_soon();
+            }
+        },
+        std::time::Duration::from_secs(90),
+    )
+    .ok();
+    on_cleanup(move || {
+        listeners.into_iter().for_each(|l| l.remove());
+        if let Some(p) = poll {
+            p.clear();
+        }
     });
-    on_cleanup(move || listener.remove());
 
     view! {
         <header class="top">
@@ -75,11 +104,12 @@ pub fn App() -> impl IntoView {
                 Tab::Map => view! { <MapView /> }.into_any(),
                 Tab::Digest => view! { <DigestView /> }.into_any(),
                 Tab::Settings => view! {
-                    <h2>"Settings"</h2>
-                    <div class="field">
-                        <span>"Theme"</span>
-                        <ThemePicker />
-                    </div>
+                    <SettingsView
+                        settings=settings
+                        known_names=store.known_names()
+                        on_connected=move |()| store.sync_soon()
+                        on_forget=move |()| leptos::task::spawn_local(store.reset_cache(false))
+                    />
                 }.into_any(),
             }}
         </main>

@@ -47,14 +47,6 @@ impl GhError {
             GhError::BadData(why) => format!("Couldn't read data from GitHub: {why}"),
         }
     }
-
-    /// Errors worth retrying later without the person doing anything.
-    pub fn is_transient(&self) -> bool {
-        matches!(
-            self,
-            GhError::Network | GhError::RateLimited | GhError::Conflict | GhError::Http(500..)
-        )
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -117,8 +109,6 @@ struct PutContent {
 #[derive(Deserialize)]
 pub struct RepoInfo {
     pub full_name: String,
-    #[serde(default)]
-    pub private: bool,
 }
 
 impl Gh {

@@ -40,7 +40,7 @@ impl ThemePref {
             ThemePref::Dark => crate::util::local_set(KEY, "dark"),
         }
         let apply = js_sys::Reflect::get(&window(), &JsValue::from_str("aarambhApplyTheme"));
-        if let Ok(f) = apply.and_then(|f| f.dyn_into::<js_sys::Function>().map_err(Into::into)) {
+        if let Ok(f) = apply.and_then(|f| f.dyn_into::<js_sys::Function>()) {
             let _ = f.call0(&JsValue::NULL);
         }
     }

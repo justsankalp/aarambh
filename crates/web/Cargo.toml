@@ -16,6 +16,7 @@ wasm-bindgen-futures = "=0.4.80"
 js-sys = "=0.3.107"
 web-sys = { version = "=0.3.107", features = [
     "Document",
+    "VisibilityState",
     "Element",
     "Headers",
     "HtmlElement",
@@ -34,4 +35,4 @@ web-sys = { version = "=0.3.107", features = [
 console_error_panic_hook = "=0.1.7"
 getrandom = { version = "=0.4.3", features = ["wasm_js"] }
 base64 = "=0.23.1"
-idb = "=0.6.5"
+idb = { version = "=0.6.5", default-features = false, features = ["futures"] }

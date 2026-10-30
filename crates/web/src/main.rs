@@ -1,5 +1,8 @@
 mod app;
+mod cache;
 mod github;
+mod settings;
+mod store;
 mod theme;
 mod util;
 mod views;
