@@ -9,12 +9,14 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
 
 const DB_NAME: &str = "aarambh";
-const DB_VERSION: u32 = 1;
+const DB_VERSION: u32 = 2;
 
 pub const FILES: &str = "files";
 pub const QUEUE: &str = "queue";
 pub const META: &str = "meta";
-const STORES: [&str; 3] = [FILES, QUEUE, META];
+/// Judgments by note id (added in version 2).
+pub const JUDGMENTS: &str = "judgments";
+const STORES: [&str; 4] = [FILES, QUEUE, META, JUDGMENTS];
 
 pub const META_REPO: &str = "repo";
 pub const META_EVENTS_ETAG: &str = "events_etag";
@@ -24,6 +26,9 @@ pub const META_DIGESTS: &str = "digests";
 pub const META_DIGESTS_ETAG: &str = "digests_etag";
 pub const META_DIGEST_STATE: &str = "digest_state";
 pub const META_DIGEST_STATE_ETAG: &str = "digest_state_etag";
+pub const META_JUDGMENTS: &str = "judgments_listing";
+pub const META_JUDGMENTS_ETAG: &str = "judgments_etag";
+pub const META_LAYOUT: &str = "layout";
 
 /// A repo file as last fetched.
 #[derive(Serialize, Deserialize, Clone, Debug)]

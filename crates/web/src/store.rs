@@ -4,11 +4,11 @@
 //! flushed to the repo whenever we're online.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use aarambh_core::digest::{DIGESTS_DIR, DigestState, STATE_PATH, digest_date};
 use aarambh_core::sync::{INITIAL_DAYS, day_from_events_file};
-use aarambh_core::{Day, Event, EventBody, Id, Log, Taxonomy, Timestamp, parse_day_file};
+use aarambh_core::{Day, Event, EventBody, Id, Judgment, Log, Taxonomy, Timestamp, parse_day_file};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -44,6 +44,8 @@ pub struct Store {
     /// Digest files as (date, blob sha), newest first.
     pub digests: RwSignal<Vec<(String, String)>>,
     pub digest_state: RwSignal<Option<DigestState>>,
+    /// Machine judgments for loaded notes, by note id.
+    pub judgments: RwSignal<HashMap<Id, Judgment>>,
     /// Entries in day files this version couldn't read.
     pub skipped: RwSignal<usize>,
     pub days_loaded: RwSignal<i64>,
@@ -75,6 +77,7 @@ impl Store {
             taxonomy: RwSignal::new(Taxonomy::default()),
             digests: RwSignal::new(Vec::new()),
             digest_state: RwSignal::new(None),
+            judgments: RwSignal::new(HashMap::new()),
             skipped: RwSignal::new(0),
             days_loaded: RwSignal::new(INITIAL_DAYS),
             has_older: RwSignal::new(false),
@@ -129,6 +132,87 @@ impl Store {
         {
             self.digest_state.set(DigestState::parse(&s).ok());
         }
+        let judgments: HashMap<Id, Judgment> = cache::all(cache::JUDGMENTS)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|s| serde_json::from_str::<cache::CachedFile>(s).ok())
+            .filter_map(|c| serde_json::from_str::<Judgment>(&c.text).ok())
+            .map(|j| (j.note_id, j))
+            .collect();
+        self.judgments.set(judgments);
+    }
+
+    /// Fetches judgments for loaded notes that are new or changed. The
+    /// listing is conditional; files are fetched only when their sha moved.
+    pub async fn refresh_judgments(self) -> Result<(), GhError> {
+        let Some(gh) = self.settings.get_untracked().client() else {
+            return Ok(());
+        };
+        let etag = cache::get(cache::META, cache::META_JUDGMENTS_ETAG)
+            .await
+            .ok()
+            .flatten()
+            .filter(|e| !e.is_empty());
+        let listing: Vec<(String, String)> =
+            match gh.list_dir("data/judgments", etag.as_deref()).await? {
+                Fetched::Found((entries, etag)) => {
+                    let list: Vec<(String, String)> = entries
+                        .into_iter()
+                        .filter_map(|e| Some((e.name.strip_suffix(".json")?.to_owned(), e.sha)))
+                        .collect();
+                    if let Ok(json) = serde_json::to_string(&list) {
+                        let _ = cache::put(cache::META, cache::META_JUDGMENTS, &json).await;
+                    }
+                    let _ = cache::put(
+                        cache::META,
+                        cache::META_JUDGMENTS_ETAG,
+                        etag.as_deref().unwrap_or(""),
+                    )
+                    .await;
+                    list
+                }
+                Fetched::Missing => Vec::new(),
+                // Unchanged listing: still fetch judgments for notes loaded since.
+                Fetched::NotModified => cache::get(cache::META, cache::META_JUDGMENTS)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|s| serde_json::from_str(&s).ok())
+                    .unwrap_or_default(),
+            };
+        for (name, sha) in listing {
+            let Ok(id) = name.parse::<Id>() else { continue };
+            if !self.log.with_untracked(|l| l.contains(id)) {
+                continue;
+            }
+            let cached = cache::get(cache::JUDGMENTS, &name).await.ok().flatten();
+            if cached
+                .and_then(|c| serde_json::from_str::<cache::CachedFile>(&c).ok())
+                .is_some_and(|c| c.sha == sha)
+            {
+                continue;
+            }
+            let Fetched::Found(f) = gh
+                .get_file(&format!("data/judgments/{name}.json"), None)
+                .await?
+            else {
+                continue;
+            };
+            let Ok(j) = serde_json::from_str::<Judgment>(&f.text) else {
+                continue;
+            };
+            if let Ok(json) = serde_json::to_string(&cache::CachedFile {
+                sha: f.sha,
+                text: f.text,
+            }) {
+                let _ = cache::put(cache::JUDGMENTS, &name, &json).await;
+            }
+            self.judgments.update(|m| {
+                m.insert(id, j);
+            });
+        }
+        Ok(())
     }
 
     /// Re-reads the list of digests and state.json (both conditional).
@@ -294,9 +378,9 @@ impl Store {
     /// Called when the repo changes or the device is forgotten.
     pub async fn reset_cache(self, keep_queue: bool) {
         let stores: &[&str] = if keep_queue {
-            &[cache::FILES, cache::META]
+            &[cache::FILES, cache::META, cache::JUDGMENTS]
         } else {
-            &[cache::FILES, cache::META, cache::QUEUE]
+            &[cache::FILES, cache::META, cache::QUEUE, cache::JUDGMENTS]
         };
         let _ = cache::clear(stores).await;
         let queued = if keep_queue {
@@ -311,6 +395,7 @@ impl Store {
             l
         });
         self.skipped.set(0);
+        self.judgments.set(HashMap::new());
         self.days_loaded.set(INITIAL_DAYS);
         self.has_older.set(false);
     }
