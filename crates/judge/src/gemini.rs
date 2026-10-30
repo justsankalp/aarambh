@@ -115,6 +115,29 @@ pub fn parse_response(resp: &Value) -> Result<Value, LlmError> {
     serde_json::from_str(text.trim()).map_err(|e| LlmError::BadOutput(format!("not JSON: {e}")))
 }
 
+/// Google's error message plus any field-level details, which say which
+/// part of the request was refused.
+pub fn error_message(body: &str) -> String {
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return body.chars().take(500).collect();
+    };
+    let mut msg = v["error"]["message"]
+        .as_str()
+        .unwrap_or("no message")
+        .to_owned();
+    for d in v["error"]["details"].as_array().into_iter().flatten() {
+        for f in d["fieldViolations"].as_array().into_iter().flatten() {
+            let field = f["field"].as_str().unwrap_or("?");
+            let why = f["description"].as_str().unwrap_or("");
+            msg.push_str(&format!(" [{field}: {why}]"));
+        }
+        if let Some(r) = d["reason"].as_str() {
+            msg.push_str(&format!(" [{r}]"));
+        }
+    }
+    msg
+}
+
 fn retry_after(resp: &reqwest::Response) -> Option<Duration> {
     let secs: u64 = resp
         .headers()
@@ -176,11 +199,10 @@ impl Judge for Gemini {
                 .await
                 .map_err(|e| LlmError::Unavailable(e.to_string()))?;
             if status != 200 {
-                let message = serde_json::from_str::<Value>(&text)
-                    .ok()
-                    .and_then(|v| v["error"]["message"].as_str().map(str::to_owned))
-                    .unwrap_or(text);
-                return Err(LlmError::Rejected { status, message });
+                return Err(LlmError::Rejected {
+                    status,
+                    message: error_message(&text),
+                });
             }
             let v: Value =
                 serde_json::from_str(&text).map_err(|e| LlmError::BadOutput(e.to_string()))?;
@@ -215,6 +237,18 @@ mod tests {
         assert_eq!(rel["format"], "enum");
         assert_eq!(rel["enum"], json!(["a", "b"]));
         assert_eq!(g["properties"]["edges"]["maxItems"], 2);
+    }
+
+    #[test]
+    fn error_details_are_kept() {
+        let body = r#"{"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT",
+            "details":[{"@type":"type.googleapis.com/google.rpc.BadRequest","fieldViolations":[
+            {"field":"generation_config.response_schema","description":"too deep"}]}]}}"#;
+        assert_eq!(
+            error_message(body),
+            "Request contains an invalid argument. [generation_config.response_schema: too deep]"
+        );
+        assert_eq!(error_message("not json"), "not json");
     }
 
     #[test]
