@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "through": "2026-10-30T19:26:47.878Z",
+  "generated_at": "2026-10-30T20:10:25.117Z",
+  "model": "gemini-3.5-flash",
+  "ideas": [],
+  "disagreements": [],
+  "assumptions": [
+    {
+      "text": "Burmester & Vogel and Voyager Portal offer products for maritime laytime and demurrage pay.",
+      "status": "supported",
+      "note_ids": [
+        "01M674EV26Q79D35QWFWC1XGK7"
+      ]
+    },
+    {
+      "text": "Maritime laytime and demurrage pay is primarily dealt under the table by older industry contacts.",
+      "status": "untested",
+      "note_ids": [
+        "01M674EV26Q79D35QWFWC1XGK7"
+      ]
+    }
+  ],
+  "open_questions": [],
+  "patterns": []
+}
