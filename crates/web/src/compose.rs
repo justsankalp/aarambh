@@ -184,6 +184,7 @@ pub fn ComposeSheet() -> impl IntoView {
                         "Unlink"
                     </button>
                 </div>
+                <p class="group-label" aria-hidden="true">"How it relates"</p>
                 <div class="chips" role="group" aria-label="How it relates">
                     {Rel::ALL.map(|r| view! {
                         <button
@@ -198,6 +199,7 @@ pub fn ComposeSheet() -> impl IntoView {
                     })}
                 </div>
             })}
+            <p class="group-label" aria-hidden="true">"Kind"</p>
             <div class="chips" role="group" aria-label="Kind">
                 {NoteKind::ALL.map(|k| view! {
                     <button

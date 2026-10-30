@@ -675,7 +675,15 @@ hr.soft {
 }
 
 .sheet .chips {
-  margin: 10px 0;
+  margin: 4px 0 10px;
+}
+
+.group-label {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .compose-text {
