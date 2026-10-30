@@ -34,7 +34,7 @@ jobs:
           tool: trunk@0.22.1
 
       - name: Test core
-        run: cargo test -p aarambh-core --locked
+        run: cargo test -p aarambh-core --all-features --locked
 
       - name: Build
         run: |
@@ -49,8 +49,8 @@ jobs:
           raw=$(stat -c%s "$wasm")
           gz=$(gzip -9c "$wasm" | wc -c)
           echo "wasm: $((raw / 1024)) KB raw, $((gz / 1024)) KB gzipped" >> "$GITHUB_STEP_SUMMARY"
-          # Target is 150 KB gzipped. Warn rather than fail until the budget is settled.
-          test "$gz" -le 153600 || echo "::warning::wasm is $((gz / 1024)) KB gzipped, over the 150 KB target"
+          # Budget agreed after Phase 2: 300 KB gzipped. Warn, don't block deploys.
+          test "$gz" -le 307200 || echo "::warning::wasm is $((gz / 1024)) KB gzipped, over the 300 KB budget"
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
