@@ -5,6 +5,7 @@ pub mod feed;
 pub mod id;
 pub mod judgment;
 pub mod log;
+pub mod search;
 pub mod sync;
 pub mod taxonomy;
 pub mod time;
