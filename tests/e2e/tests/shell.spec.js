@@ -83,8 +83,9 @@ test.describe("local-first", () => {
     await page.reload();
     await expect(page.locator(".sync-line")).toContainText("Synced");
     // The events listing is conditional. The taxonomy and judgments are
-    // checked too (404s here, as this mock repo has neither).
-    expect(gh.log.sort()).toEqual([
+    // checked too (404s here, as this mock repo has neither); judgments come
+    // just after "Synced", so wait for them.
+    await expect.poll(() => [...gh.log].sort()).toEqual([
       "GET /repos/justsankalp/aarambh/contents/data/events (etag)",
       "GET /repos/justsankalp/aarambh/contents/data/judgments",
       "GET /repos/justsankalp/aarambh/contents/data/taxonomy.toml",
