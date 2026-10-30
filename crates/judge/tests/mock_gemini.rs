@@ -190,7 +190,9 @@ async fn client_errors_are_not_retried() {
         err,
         LlmError::Rejected {
             status: 400,
-            message: "model not found".into()
+            message:
+                "with responseSchema: model not found; with responseJsonSchema: model not found"
+                    .into()
         }
     );
     // One try per schema form, no backoff retries.
