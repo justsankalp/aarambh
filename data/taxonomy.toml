@@ -1,0 +1,63 @@
+# Failure modes used by post-mortems (when an idea is dropped or decided) and
+# by the judge's risk flags. Edit freely: add, reword or remove modes.
+# `id` is stored in events, so rename an id only if no lesson uses it yet.
+
+[[mode]]
+id = "no-paying-customer"
+label = "No paying customer"
+hint = "Nobody has paid, or clearly would."
+
+[[mode]]
+id = "no-clear-wedge"
+label = "No clear wedge"
+hint = "No narrow first use case that wins on its own."
+
+[[mode]]
+id = "market-too-small"
+label = "Market too small"
+hint = "Even winning it fully would not be worth it."
+
+[[mode]]
+id = "crowded-no-edge"
+label = "Crowded, no edge"
+hint = "Many others do this and we have no lasting advantage."
+
+[[mode]]
+id = "slow-to-validate"
+label = "Slow to validate"
+hint = "It takes months to learn whether it works."
+
+[[mode]]
+id = "capability-gap"
+label = "Capability gap"
+hint = "Needs skills, tech or access we do not have."
+
+[[mode]]
+id = "hard-to-reach-users"
+label = "Hard to reach users"
+hint = "We cannot find or talk to the people who would use it."
+
+[[mode]]
+id = "trust-or-regulation"
+label = "Trust or regulation"
+hint = "Licences, compliance or trust stand in the way."
+
+[[mode]]
+id = "unit-economics"
+label = "Unit economics"
+hint = "Each customer costs more than they bring in."
+
+[[mode]]
+id = "bad-timing"
+label = "Bad timing"
+hint = "Too early or too late for the market or the tech."
+
+[[mode]]
+id = "distribution-dependency"
+label = "Distribution dependency"
+hint = "Relies on one platform or partner that controls access."
+
+[[mode]]
+id = "low-conviction"
+label = "Low conviction"
+hint = "We are not excited enough to push through the hard parts."
