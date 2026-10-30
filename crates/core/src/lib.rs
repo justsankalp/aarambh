@@ -7,6 +7,7 @@ pub mod graph;
 pub mod id;
 pub mod judging;
 pub mod judgment;
+pub mod layout;
 pub mod log;
 pub mod markdown;
 pub mod search;
