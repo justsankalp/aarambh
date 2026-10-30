@@ -14,7 +14,7 @@ pub const COLD_ITERATIONS: u32 = 300;
 pub const WARM_ITERATIONS: u32 = 80;
 /// Ideal distance between connected nodes, in layout units.
 const SPACING: f64 = 60.0;
-const GRAVITY: f64 = 0.04;
+const GRAVITY: f64 = 1.0;
 /// Fraction of the net force applied per step.
 const STEP: f64 = 0.08;
 
@@ -152,10 +152,16 @@ impl Layout {
                 disp[b][0] += dx * f;
                 disp[b][1] += dy * f;
             }
-            // A gentle pull to the middle keeps separate clusters on screen.
+            // A steady pull to the middle (constant strength, growing with
+            // the number of notes) keeps unlinked notes from drifting far
+            // out and squeezing the linked clusters into specks.
+            let gravity = GRAVITY * (n as f64).sqrt() * k;
             for (i, p) in self.pos.iter_mut().enumerate() {
-                disp[i][0] -= p[0] * GRAVITY;
-                disp[i][1] -= p[1] * GRAVITY;
+                let r = (p[0] * p[0] + p[1] * p[1]).sqrt();
+                if r > 1.0 {
+                    disp[i][0] -= p[0] / r * gravity * self.weight[i];
+                    disp[i][1] -= p[1] / r * gravity * self.weight[i];
+                }
                 // Move a fraction of the net force, capped by the temperature:
                 // jumping the full capped distance makes hubs oscillate.
                 let len = (disp[i][0] * disp[i][0] + disp[i][1] * disp[i][1]).sqrt();
@@ -282,6 +288,27 @@ mod tests {
         again.finish();
         let moved = mean(first.pos.iter().zip(&again.pos).map(|(a, b)| dist(*a, *b)));
         assert!(moved < SPACING * 0.3, "moved {moved:.1}");
+    }
+
+    #[test]
+    fn unlinked_notes_dont_squeeze_the_clusters() {
+        // Three hubs with six notes each, plus twelve unlinked notes. Links
+        // should stay a readable fraction of the whole picture.
+        let n = 3 * 7 + 12;
+        let ids = ids(n as u64);
+        let edges: Vec<(usize, usize)> = (0..3)
+            .flat_map(|h| (1..7).map(move |l| (h * 7, h * 7 + l)))
+            .collect();
+        let mut l = Layout::new(&ids, &vec![false; n], &edges, &HashMap::new());
+        l.finish();
+        let b = l.bounds();
+        let diag = ((b[2] - b[0]).powi(2) + (b[3] - b[1]).powi(2)).sqrt();
+        let link = mean(edges.iter().map(|&(a, c)| dist(l.pos[a], l.pos[c])));
+        assert!(link / diag > 0.06, "link {link:.0} vs diagonal {diag:.0}");
+        assert!(
+            link > SPACING * 0.75,
+            "linked notes aren't crushed together ({link:.0})"
+        );
     }
 
     #[test]
