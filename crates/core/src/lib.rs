@@ -10,6 +10,7 @@ pub mod judgment;
 pub mod layout;
 pub mod log;
 pub mod markdown;
+pub mod momentum;
 pub mod search;
 pub mod sync;
 pub mod taxonomy;
