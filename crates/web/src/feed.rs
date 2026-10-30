@@ -320,6 +320,17 @@ pub fn NotesView() -> impl IntoView {
     let items = Memo::new(move |_| filter.with(|f| build_items(store, f)));
     let has_notes = move || store.log.with(|l| l.iter().any(|e| e.as_note().is_some()));
 
+    // Another tab (the Map) asked to show a note.
+    Effect::new(move |_| {
+        if let Some(id) = store.focus.get() {
+            store.focus.set(None);
+            set_timeout(
+                move || jump_to(store, filter, notice, id),
+                std::time::Duration::from_millis(60),
+            );
+        }
+    });
+
     view! {
         <SyncLine />
         <Show when=has_notes>

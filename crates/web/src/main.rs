@@ -4,6 +4,7 @@ mod compose;
 mod digest;
 mod feed;
 mod github;
+mod map;
 mod settings;
 mod status;
 mod store;

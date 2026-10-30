@@ -16,6 +16,11 @@ wasm-bindgen-futures = "=0.4.80"
 js-sys = "=0.3.107"
 web-sys = { version = "=0.3.107", features = [
     "AbortController",
+    "CanvasRenderingContext2d",
+    "HtmlCanvasElement",
+    "Performance",
+    "PointerEvent",
+    "WheelEvent",
     "AbortSignal",
     "Document",
     "DomTokenList",

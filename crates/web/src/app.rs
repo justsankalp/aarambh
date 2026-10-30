@@ -7,11 +7,11 @@ use leptos::prelude::*;
 use crate::compose::{ComposeSheet, Composer, track_keyboard_inset};
 use crate::digest::DigestView;
 use crate::feed::NotesView;
+use crate::map::MapView;
 use crate::settings::{Settings, SettingsView};
 use crate::status::{StatusSheet, StatusSheetView};
 use crate::store::Store;
 use crate::util::location_hash;
-use crate::views::MapView;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {

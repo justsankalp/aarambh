@@ -44,6 +44,8 @@ pub struct Store {
     /// Digest files as (date, blob sha), newest first.
     pub digests: RwSignal<Vec<(String, String)>>,
     pub digest_state: RwSignal<Option<DigestState>>,
+    /// A note another tab asked the feed to scroll to.
+    pub focus: RwSignal<Option<Id>>,
     /// Machine judgments for loaded notes, by note id.
     pub judgments: RwSignal<HashMap<Id, Judgment>>,
     /// Entries in day files this version couldn't read.
@@ -78,6 +80,7 @@ impl Store {
             digests: RwSignal::new(Vec::new()),
             digest_state: RwSignal::new(None),
             judgments: RwSignal::new(HashMap::new()),
+            focus: RwSignal::new(None),
             skipped: RwSignal::new(0),
             days_loaded: RwSignal::new(INITIAL_DAYS),
             has_older: RwSignal::new(false),
@@ -344,6 +347,8 @@ impl Store {
     pub async fn sync(self) {
         self.flush().await;
         self.refresh().await;
+        // After notes load, so judgments for newly loaded notes are fetched.
+        let _ = self.refresh_judgments().await;
     }
 
     pub fn sync_soon(self) {

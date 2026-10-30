@@ -1,4 +1,4 @@
-//! Shared bits and the Map tab (filled in by Phase 4).
+//! Bits shared by several tabs.
 
 use leptos::prelude::*;
 
@@ -35,12 +35,4 @@ pub fn SyncLine() -> impl IntoView {
     };
     let is_error = move || matches!(store.state.get(), SyncState::Failed(_));
     view! { <p class="sync-line" class:error=is_error role="status" aria-live="polite">{text}</p> }
-}
-
-#[component]
-pub fn MapView() -> impl IntoView {
-    view! {
-        <h2>"Map"</h2>
-        <p class="lede">"How your ideas connect and where they stand. Coming soon."</p>
-    }
 }
