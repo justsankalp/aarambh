@@ -1,0 +1,10 @@
+[package]
+name = "judge"
+description = "Native CLI run by GitHub Actions: judges new notes and writes digests."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+aarambh-core.workspace = true
