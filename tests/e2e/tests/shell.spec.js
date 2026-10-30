@@ -82,9 +82,11 @@ test.describe("local-first", () => {
     gh.log.length = 0;
     await page.reload();
     await expect(page.locator(".sync-line")).toContainText("Synced");
-    // The listing is conditional; the taxonomy is fetched too (404 here, as the mock repo has none).
+    // The events listing is conditional. The taxonomy and judgments are
+    // checked too (404s here, as this mock repo has neither).
     expect(gh.log.sort()).toEqual([
       "GET /repos/justsankalp/aarambh/contents/data/events (etag)",
+      "GET /repos/justsankalp/aarambh/contents/data/judgments",
       "GET /repos/justsankalp/aarambh/contents/data/taxonomy.toml",
     ]);
   });
