@@ -97,6 +97,16 @@ struct ContentResp {
     encoding: String,
 }
 
+/// A typed body rather than `json!`, which would pull serde_json's
+/// `Value` into the app just for this.
+#[derive(serde::Serialize)]
+struct PutBody<'a> {
+    message: &'a str,
+    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha: Option<&'a str>,
+}
+
 #[derive(Deserialize)]
 struct PutResp {
     content: PutContent,
@@ -276,13 +286,13 @@ impl Gh {
         sha: Option<&str>,
         message: &str,
     ) -> Result<String, GhError> {
-        let mut body = serde_json::json!({ "message": message, "content": B64.encode(text) });
-        if let Some(s) = sha {
-            body["sha"] = s.into();
-        }
-        let r = self
-            .send("PUT", &self.url(path), Some(&body.to_string()), None)
-            .await?;
+        let body = PutBody {
+            message,
+            content: B64.encode(text),
+            sha,
+        };
+        let body = serde_json::to_string(&body).map_err(|e| GhError::BadData(e.to_string()))?;
+        let r = self.send("PUT", &self.url(path), Some(&body), None).await?;
         if r.status != 200 && r.status != 201 {
             return Err(Self::error_for(&r));
         }

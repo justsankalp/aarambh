@@ -647,10 +647,9 @@ fn MaybeTray(graph: Memo<Graph>) -> impl IntoView {
             <section class="maybe">
                 <h3>"Maybe"</h3>
                 <p class="muted small-print">"Links and risks the judge wasn't sure about. Confirm to add them to the map."</p>
-                <For
-                    each=move || graph.with(|g| g.maybe.clone())
-                    key=Maybe::id
-                    children=move |m| {
+                // A plain list re-rendered on change: the tray is short, and a
+                // keyed <For> costs more code than it saves here.
+                {move || graph.with(|g| g.maybe.clone()).into_iter().map(|m| {
                         let id = m.id();
                         let (what, why) = match m {
                             Maybe::Link { from, to, rel, why, .. } => (
@@ -690,8 +689,7 @@ fn MaybeTray(graph: Memo<Graph>) -> impl IntoView {
                                 </div>
                             </div>
                         }
-                    }
-                />
+                    }).collect_view()}
             </section>
         </Show>
     }
@@ -722,10 +720,7 @@ fn MapList() -> impl IntoView {
                 <Show when=move || ideas.with(|v| v.iter().any(|i| i.status == status))>
                     <h4>{heading}</h4>
                     <ul class="idea-list">
-                        <For
-                            each=move || ideas.with(|v| v.iter().filter(|i| i.status == status).cloned().collect::<Vec<_>>())
-                            key=|i| (i.id, i.timeline.len())
-                            children=move |i| {
+                        {move || ideas.with(|v| v.iter().filter(|i| i.status == status).cloned().collect::<Vec<_>>()).into_iter().map(|i| {
                                 let id = i.id;
                                 view! {
                                     <li class="card">
@@ -735,8 +730,7 @@ fn MapList() -> impl IntoView {
                                         </ol>
                                     </li>
                                 }
-                            }
-                        />
+                        }).collect_view()}
                     </ul>
                 </Show>
             })}

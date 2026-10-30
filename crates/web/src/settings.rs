@@ -200,18 +200,14 @@ pub fn SettingsView(
                 <input type="text" name="name" bind:value=name autocomplete="nickname" maxlength="40" />
                 <Show when=move || !known_names.get().is_empty()>
                     <div class="chips" role="group" aria-label="Names in this notebook">
-                        <For
-                            each=move || known_names.get()
-                            key=|n| n.clone()
-                            children=move |n| {
-                                let pick = n.clone();
-                                view! {
-                                    <button type="button" class="chip" on:click=move |_| name.set(pick.clone())>
-                                        {n}
-                                    </button>
-                                }
+                        {move || known_names.get().into_iter().map(|n| {
+                            let pick = n.clone();
+                            view! {
+                                <button type="button" class="chip" on:click=move |_| name.set(pick.clone())>
+                                    {n}
+                                </button>
                             }
-                        />
+                        }).collect_view()}
                     </div>
                 </Show>
             </label>
