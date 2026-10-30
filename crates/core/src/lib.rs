@@ -4,6 +4,7 @@ pub mod event;
 pub mod id;
 pub mod judgment;
 pub mod log;
+pub mod sync;
 pub mod taxonomy;
 pub mod time;
 
