@@ -304,6 +304,16 @@ impl Store {
         }
     }
 
+    /// The latest "Summarise now" run, to notice when it fails.
+    pub async fn latest_digest_run(self) -> Result<Option<crate::github::WorkflowRun>, GhError> {
+        let gh = self
+            .settings
+            .get_untracked()
+            .client()
+            .ok_or(GhError::Unauthorized)?;
+        gh.latest_dispatched_run("digest.yml").await
+    }
+
     /// Starts the digest workflow.
     pub async fn summarise_now(self) -> Result<(), GhError> {
         let gh = self

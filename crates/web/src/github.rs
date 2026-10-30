@@ -118,6 +118,20 @@ struct PutContent {
 }
 
 #[derive(Deserialize)]
+struct WorkflowRuns {
+    #[serde(default)]
+    workflow_runs: Vec<WorkflowRun>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct WorkflowRun {
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub created_at: String,
+    pub html_url: String,
+}
+
+#[derive(Deserialize)]
 pub struct RepoInfo {
     pub full_name: String,
 }
@@ -259,6 +273,21 @@ impl Gh {
             }
             _ => Err(Self::error_for(&r)),
         }
+    }
+
+    /// The most recent manually started run of a workflow.
+    pub async fn latest_dispatched_run(&self, file: &str) -> Result<Option<WorkflowRun>, GhError> {
+        let url = format!(
+            "{}/actions/workflows/{file}/runs?event=workflow_dispatch&per_page=1",
+            self.repo.api_base()
+        );
+        let r = self.send("GET", &url, None, None).await?;
+        if r.status != 200 {
+            return Err(Self::error_for(&r));
+        }
+        let runs: WorkflowRuns =
+            serde_json::from_str(&r.body).map_err(|e| GhError::BadData(e.to_string()))?;
+        Ok(runs.workflow_runs.into_iter().next())
     }
 
     /// Starts a workflow on main (the digest's "Summarise now").

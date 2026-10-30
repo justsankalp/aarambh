@@ -23,6 +23,8 @@ enum Summarise {
     Waiting,
     Done,
     Failed(String),
+    /// The workflow ran and failed; the link is to its run on GitHub.
+    JobFailed(String),
 }
 
 fn inlines(v: Vec<Inline>) -> AnyView {
@@ -168,22 +170,56 @@ pub fn DigestView() -> impl IntoView {
                 return;
             }
             summarise.set(Summarise::Waiting);
+            // Allow for the device's clock being off from GitHub's.
+            let started = Timestamp(now_ms().saturating_sub(120_000));
             let deadline = now_ms() + WAIT_FOR.as_millis() as u64;
-            while now_ms() < deadline {
-                sleep_ms(POLL_EVERY_MS).await;
-                let _ = store.refresh_digests().await;
+            let landed = move || {
                 let after = store
                     .digest_state
                     .with_untracked(|s| s.as_ref().and_then(|s| s.generated_at));
-                if after != before {
-                    selected.set(
-                        store
-                            .digests
-                            .with_untracked(|l| l.first().map(|(d, _)| d.clone())),
-                    );
-                    summarise.set(Summarise::Done);
+                if after == before {
+                    return false;
+                }
+                selected.set(
+                    store
+                        .digests
+                        .with_untracked(|l| l.first().map(|(d, _)| d.clone())),
+                );
+                summarise.set(Summarise::Done);
+                true
+            };
+            while now_ms() < deadline {
+                sleep_ms(POLL_EVERY_MS).await;
+                let _ = store.refresh_digests().await;
+                if landed() {
                     return;
                 }
+                // Stop waiting as soon as the run finishes without a new summary.
+                let Ok(Some(run)) = store.latest_digest_run().await else {
+                    continue;
+                };
+                let ours = run
+                    .created_at
+                    .parse::<Timestamp>()
+                    .is_ok_and(|t| t >= started);
+                if !ours || run.status != "completed" {
+                    continue;
+                }
+                if run.conclusion.as_deref() == Some("success") {
+                    // The summary may have landed just after we looked.
+                    let _ = store.refresh_digests().await;
+                    if !landed() {
+                        summarise.set(Summarise::Failed("Nothing new to summarise.".into()));
+                    }
+                } else {
+                    let url = if run.html_url.starts_with("https://github.com/") {
+                        run.html_url
+                    } else {
+                        String::new()
+                    };
+                    summarise.set(Summarise::JobFailed(url));
+                }
+                return;
             }
             summarise.set(Summarise::Failed(
                 "Still working, or nothing new to summarise. Check back in a few minutes.".into(),
@@ -249,6 +285,13 @@ pub fn DigestView() -> impl IntoView {
             .into_any(),
             Summarise::Done => view! { <p class="notice" role="status">"New summary ready."</p> }.into_any(),
             Summarise::Failed(m) => view! { <p class="status-msg error" role="alert">{m}</p> }.into_any(),
+            Summarise::JobFailed(url) => view! {
+                <p class="status-msg error" role="alert">
+                    "The summary job failed. "
+                    {(!url.is_empty()).then(|| view! { <a href=url target="_blank" rel="noopener noreferrer">"See what went wrong"</a> })}
+                </p>
+            }
+            .into_any(),
             Summarise::Idle => ().into_any(),
         }}
         {move || match (selected.get(), text.get()) {
