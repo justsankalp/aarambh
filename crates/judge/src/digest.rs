@@ -11,13 +11,11 @@ use std::io;
 use std::path::PathBuf;
 
 use aarambh_core::digest::{
-    Assumption, AssumptionStatus, DigestState, Disagreement, IdeaState, OpenQuestion, Pattern,
-    Position, TimelineEntry,
+    Assumption, AssumptionStatus, DigestState, Disagreement, OpenQuestion, Pattern, Position,
+    ideas_state,
 };
 use aarambh_core::feed::excerpt;
-use aarambh_core::{
-    Day, Event, EventBody, Id, Judgment, Log, NoteKind, Strength, Taxonomy, Timestamp,
-};
+use aarambh_core::{Day, Event, EventBody, Id, Judgment, Log, Strength, Taxonomy, Timestamp};
 use serde_json::{Value, json};
 
 use crate::data::Repo;
@@ -137,39 +135,6 @@ fn note_line(e: &Event) -> String {
         Some(n) => format!("{} · {} · {}", e.ts.day(), e.author, n.kind.as_str()),
         None => format!("{} · {}", e.ts.day(), e.author),
     }
-}
-
-/// Idea statuses and timelines, built only from events.
-pub fn ideas_state(log: &Log) -> Vec<IdeaState> {
-    log.iter()
-        .filter(|e| e.as_note().is_some_and(|n| n.kind == NoteKind::Idea))
-        .map(|idea| {
-            let mut timeline = vec![TimelineEntry {
-                date: idea.ts.day().to_string(),
-                what: format!("Proposed by {}", idea.author),
-            }];
-            for e in log.iter() {
-                if let EventBody::Status(s) = &e.body
-                    && s.idea == idea.id
-                {
-                    let st = format!("{:?}", s.status).to_lowercase();
-                    timeline.push(TimelineEntry {
-                        date: e.ts.day().to_string(),
-                        what: format!("Marked {st} by {}", e.author),
-                    });
-                }
-            }
-            IdeaState {
-                id: idea.id,
-                title: excerpt(
-                    &idea.as_note().map_or(String::new(), |n| n.text.clone()),
-                    80,
-                ),
-                status: log.status_of(idea.id),
-                timeline,
-            }
-        })
-        .collect()
 }
 
 pub struct Prompt {

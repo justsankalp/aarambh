@@ -3,7 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::{Event, EventBody, IdeaStatus};
+use crate::event::{Event, EventBody, IdeaStatus, NoteKind};
+use crate::feed::excerpt;
 use crate::id::Id;
 use crate::log::Log;
 use crate::time::Timestamp;
@@ -114,6 +115,39 @@ impl DigestState {
     }
 }
 
+/// Idea statuses and timelines, built only from events.
+pub fn ideas_state(log: &Log) -> Vec<IdeaState> {
+    log.iter()
+        .filter(|e| e.as_note().is_some_and(|n| n.kind == NoteKind::Idea))
+        .map(|idea| {
+            let mut timeline = vec![TimelineEntry {
+                date: idea.ts.day().to_string(),
+                what: format!("Proposed by {}", idea.author),
+            }];
+            for e in log.iter() {
+                if let EventBody::Status(s) = &e.body
+                    && s.idea == idea.id
+                {
+                    let st = format!("{:?}", s.status).to_lowercase();
+                    timeline.push(TimelineEntry {
+                        date: e.ts.day().to_string(),
+                        what: format!("Marked {st} by {}", e.author),
+                    });
+                }
+            }
+            IdeaState {
+                id: idea.id,
+                title: excerpt(
+                    &idea.as_note().map_or(String::new(), |n| n.text.clone()),
+                    80,
+                ),
+                status: log.status_of(idea.id),
+                timeline,
+            }
+        })
+        .collect()
+}
+
 /// `data/digests/2026-10-30.md` → its date. Other files are ignored.
 pub fn digest_date(file_name: &str) -> Option<&str> {
     let d = file_name.strip_suffix(".md")?;
@@ -210,6 +244,36 @@ mod tests {
         assert_eq!(DigestState::parse(&json).unwrap(), s);
         let minimal = DigestState::parse(r#"{"v":1,"through":null,"generated_at":null}"#).unwrap();
         assert!(minimal.ideas.is_empty() && minimal.model.is_empty());
+    }
+
+    #[test]
+    fn idea_timelines_come_from_events() {
+        use crate::event::StatusChange;
+        let idea = ev(
+            1,
+            EventBody::Note(Note {
+                kind: NoteKind::Idea,
+                text: "Sell to clinics\nmore".into(),
+                links: vec![],
+            }),
+        );
+        let other = note(2);
+        let parked = ev(
+            3,
+            EventBody::Status(StatusChange {
+                idea: idea.id,
+                status: IdeaStatus::Parked,
+                lesson: None,
+            }),
+        );
+        let mut log = Log::new();
+        log.extend([idea.clone(), other, parked]);
+        let ideas = ideas_state(&log);
+        assert_eq!(ideas.len(), 1);
+        assert_eq!(ideas[0].title, "Sell to clinics…");
+        assert_eq!(ideas[0].status, IdeaStatus::Parked);
+        let what: Vec<&str> = ideas[0].timeline.iter().map(|t| t.what.as_str()).collect();
+        assert_eq!(what, vec!["Proposed by A", "Marked parked by A"]);
     }
 
     #[test]
