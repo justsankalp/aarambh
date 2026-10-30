@@ -40,7 +40,7 @@ const CORS = {
  *   files:     { "data/events/2026-10-30.json": "<text>" }
  *   conflicts: how many PUTs to answer 409 (another device "wins" each time)
  */
-export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
+export async function mockGitHub(page, { files = {}, conflicts = 0, onDispatch = null, actionsForbidden = false } = {}) {
   const isWebKit = page.context().browser()?.browserType().name() === "webkit";
   const state = {
     files: new Map(Object.entries(files).map(([p, text]) => [p, { text, sha: sha1(text) }])),
@@ -48,6 +48,13 @@ export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
     offline: false,
     puts: [],
     log: [],
+    dispatches: [],
+    onDispatch,
+    actionsForbidden,
+    /** Adds or replaces a file, as a workflow commit would. */
+    setFile(path, text) {
+      this.files.set(path, { text, sha: sha1(text) });
+    },
   };
 
   await page.route("https://api.github.com/**", async (route) => {
@@ -58,7 +65,7 @@ export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
     if (method === "OPTIONS") {
       return route.fulfill({
         status: 204,
-        headers: { ...CORS, "access-control-allow-methods": "GET, PUT", "access-control-allow-headers": "*" },
+        headers: { ...CORS, "access-control-allow-methods": "GET, PUT, POST", "access-control-allow-headers": "*" },
       });
     }
     const headers = await req.allHeaders();
@@ -70,6 +77,13 @@ export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
 
     const base = `/repos/${REPO}`;
     if (url.pathname === base) return json(200, { full_name: REPO, private: false });
+    if (method === "POST" && url.pathname.startsWith(`${base}/actions/workflows/`)) {
+      const workflow = url.pathname.split("/").at(-2);
+      if (state.actionsForbidden) return json(403, { message: "Resource not accessible by personal access token" });
+      state.dispatches.push({ workflow, body: JSON.parse(req.postData()) });
+      if (state.onDispatch) state.onDispatch(state, workflow);
+      return route.fulfill({ status: 204, headers: CORS });
+    }
     if (!url.pathname.startsWith(`${base}/contents/`)) return json(404, { message: "Not Found" });
     const path = url.pathname.slice(`${base}/contents/`.length);
 
