@@ -141,7 +141,7 @@ pub fn build_prompt(
             "edges".into(),
             json!({
                 "type": "array",
-                "maxItems": candidates.len(),
+                "description": "At most one per earlier note.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -163,7 +163,7 @@ pub fn build_prompt(
             "risks".into(),
             json!({
                 "type": "array",
-                "maxItems": 5,
+                "description": "At most 5.",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -279,6 +279,9 @@ pub fn to_judgment(
                 mode,
             ],
         );
+        if risks.len() >= 5 {
+            break;
+        }
         risks.push(Risk {
             id,
             lesson_event,

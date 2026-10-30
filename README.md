@@ -58,7 +58,8 @@ and offline: notes written offline are sent when you're back online.
    `GEMINI_API_KEY`. Until it's set, the judge and digest jobs skip with a
    warning.
 4. **Models (optional).** The defaults are `gemini-3.5-flash-lite` for judging
-   and `gemini-3.8-flash` for digests. To change them, add repository
+   and `gemini-3.5-flash` for digests (falling back to the judge model if
+   it is rate limited). To change them, add repository
    *variables* (not secrets) `JUDGE_MODEL` and/or `DIGEST_MODEL`.
 5. **Outside contributors.** Settings → Actions → General → *Fork pull request
    workflows from outside collaborators* → **Require approval for all outside

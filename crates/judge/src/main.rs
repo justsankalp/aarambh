@@ -15,7 +15,9 @@ use judge::llm::LlmError;
 use judge::notes::judge_notes;
 
 const DEFAULT_JUDGE_MODEL: &str = "gemini-3.5-flash-lite";
-const DEFAULT_DIGEST_MODEL: &str = "gemini-3.8-flash";
+// gemini-3.8-flash has a very small free-tier quota; this one has more,
+// and the digest falls back to the judge model if it is rate limited.
+const DEFAULT_DIGEST_MODEL: &str = "gemini-3.5-flash";
 const USAGE: &str = "usage: judge <notes|digest|probe> [--data DIR] [--max N]";
 
 fn env(name: &str) -> Option<String> {

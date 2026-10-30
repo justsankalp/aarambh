@@ -48,6 +48,7 @@ divergences visible in the notes; empty if none.
 - patterns: recurring themes, ONLY if at least two different notes show them.
 - untested: up to 3 assumptions the notes lean on without evidence.
 - next_moves: up to 3 small, concrete steps that would test something.
+- Keep to the limits given in each field's description.
 - state: the running lists, updated: start from the previous state, keep what still holds, update \
 statuses, drop what's resolved, add what's new.";
 
@@ -319,7 +320,7 @@ pub fn build_prompt(
         "type": "object",
         "properties": {
             "topic": { "type": "string" },
-            "positions": { "type": "array", "maxItems": 4, "items": {
+            "positions": { "type": "array", "description": "At most 4.", "items": {
                 "type": "object", "properties": { "who": who, "says": { "type": "string" } }, "required": ["who", "says"]
             }},
             "assumption": { "type": "string" },
@@ -342,24 +343,24 @@ pub fn build_prompt(
         "type": "object",
         "properties": {
             "brief": { "type": "string" },
-            "moved": { "type": "array", "maxItems": 6, "items": { "type": "string" } },
-            "diverge": { "type": "array", "maxItems": 3, "items": disagreement },
-            "patterns": { "type": "array", "maxItems": 3, "items": cited(json!({})) },
-            "untested": { "type": "array", "maxItems": 3, "items": cited(json!({})) },
-            "next_moves": { "type": "array", "maxItems": 3, "items": { "type": "string" } },
+            "moved": { "type": "array", "description": "At most 6.", "items": { "type": "string" } },
+            "diverge": { "type": "array", "description": "At most 3.", "items": disagreement },
+            "patterns": { "type": "array", "description": "At most 3.", "items": cited(json!({})) },
+            "untested": { "type": "array", "description": "At most 3.", "items": cited(json!({})) },
+            "next_moves": { "type": "array", "description": "At most 3.", "items": { "type": "string" } },
             "state": {
                 "type": "object",
                 "properties": {
-                    "disagreements": { "type": "array", "maxItems": 10, "items": disagreement },
-                    "assumptions": { "type": "array", "maxItems": 15, "items": cited(json!({
+                    "disagreements": { "type": "array", "description": "At most 10.", "items": disagreement },
+                    "assumptions": { "type": "array", "description": "At most 15.", "items": cited(json!({
                         "status": { "type": "string", "enum": ["untested", "supported", "challenged"] }
                     })) },
-                    "open_questions": { "type": "array", "maxItems": 15, "items": {
+                    "open_questions": { "type": "array", "description": "At most 15.", "items": {
                         "type": "object",
                         "properties": { "text": { "type": "string" }, "note": { "type": "string" } },
                         "required": ["text", "note"]
                     }},
-                    "patterns": { "type": "array", "maxItems": 8, "items": cited(json!({})) }
+                    "patterns": { "type": "array", "description": "At most 8.", "items": cited(json!({})) }
                 },
                 "required": ["disagreements", "assumptions", "open_questions", "patterns"]
             }

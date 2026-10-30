@@ -695,3 +695,39 @@ async fn the_probe_tries_each_part_and_lists_models() {
     assert_eq!(get("+ maxOutputTokens 8192"), "HTTP 400: too many tokens");
     assert!(get("models this key can use").starts_with("1 flash models, NOT listed"));
 }
+
+/// Gemini refuses these schemas when they carry maxItems (seen in production
+/// on 2026-10-30); limits live in descriptions and are enforced in code.
+#[test]
+fn schemas_sent_to_gemini_have_no_max_items() {
+    use judge::notes::build_prompt as note_prompt;
+    let dir = data_dir();
+    let a = note(1, "Asha", NoteKind::Idea, "Clinics will pay");
+    let b = note(2, "Sankalp", NoteKind::Question, "Who pays at clinics?");
+    let lesson = Event::new(
+        Id::new(T0 + 3000, 3),
+        "Asha",
+        EventBody::Status(StatusChange {
+            idea: a.id,
+            status: IdeaStatus::Dropped,
+            lesson: Some(Lesson {
+                why: "x".into(),
+                ..Default::default()
+            }),
+        }),
+    );
+    let c = note(4, "Asha", NoteKind::Note, "Clinic owners again");
+    write_events(&dir, &[a, b.clone(), lesson, c.clone()]);
+    let repo = Repo::new(&dir);
+    let (log, _) = repo.load_log().unwrap();
+    let tax = repo.taxonomy();
+    let digest = judge::digest::build_prompt(&log, &DigestState::default(), &[], &tax).unwrap();
+    let cands = aarambh_core::judging::shortlist(&log, &c);
+    let lessons = aarambh_core::judging::lessons_before(&log, &c);
+    let notes = note_prompt(&c, &cands, &lessons, &tax);
+    for schema in [&digest.schema, &notes.schema] {
+        let text = schema.to_string();
+        assert!(!text.contains("maxItems"), "{text}");
+        assert!(text.contains("At most"), "limits are still stated");
+    }
+}
