@@ -10,6 +10,11 @@ publish.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ulid.workspace = true
+pulldown-cmark = { version = "=0.13.6", default-features = false, optional = true }
+
+[features]
+# Markdown to a small tree, for the web app's Digest tab.
+markdown = ["dep:pulldown-cmark"]
 
 [dev-dependencies]
 # Cross-checks the small taxonomy parser; not shipped in the web app.

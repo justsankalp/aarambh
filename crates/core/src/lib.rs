@@ -7,6 +7,8 @@ pub mod id;
 pub mod judging;
 pub mod judgment;
 pub mod log;
+#[cfg(feature = "markdown")]
+pub mod markdown;
 pub mod search;
 pub mod sync;
 pub mod taxonomy;
