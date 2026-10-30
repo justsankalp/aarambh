@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use aarambh_core::Timestamp;
 use judge::data::Repo;
-use judge::digest::{Outcome, write_digest};
+use judge::digest::{DigestError, Outcome, write_digest};
 use judge::gemini::Gemini;
 use judge::llm::LlmError;
 use judge::notes::judge_notes;
@@ -92,8 +92,19 @@ async fn main() -> ExitCode {
             }
         }
         Some("digest") => {
-            let model = env("DIGEST_MODEL").unwrap_or_else(|| DEFAULT_DIGEST_MODEL.into());
-            match write_digest(&gemini, &repo, &model, now()).await {
+            let mut model = env("DIGEST_MODEL").unwrap_or_else(|| DEFAULT_DIGEST_MODEL.into());
+            let mut result = write_digest(&gemini, &repo, &model, now()).await;
+            // A busy or unreachable model: try the lighter judge model once.
+            let fallback = env("JUDGE_MODEL").unwrap_or_else(|| DEFAULT_JUDGE_MODEL.into());
+            if let Err(DigestError::Llm(e @ (LlmError::Unavailable(_) | LlmError::RateLimited))) =
+                &result
+                && fallback != model
+            {
+                println!("::warning::{model} failed ({e}); trying {fallback}");
+                model = fallback;
+                result = write_digest(&gemini, &repo, &model, now()).await;
+            }
+            match result {
                 Ok(Outcome::NothingNew) => {
                     println!("nothing new since the last digest; skipped");
                     ExitCode::SUCCESS

@@ -15,6 +15,10 @@ pub struct Gemini {
     base_url: String,
     /// First retry delay; doubles each time. Tests set it near zero.
     pub backoff: Duration,
+    /// Send the schema as JSON Schema (`responseJsonSchema`) rather than
+    /// Gemini's OpenAPI subset (`responseSchema`). Flipped, and kept, if
+    /// Gemini refuses the first form.
+    json_schema: std::sync::atomic::AtomicBool,
 }
 
 impl Gemini {
@@ -34,19 +38,82 @@ impl Gemini {
                 .trim_end_matches('/')
                 .to_owned(),
             backoff: Duration::from_secs(2),
+            json_schema: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
-    fn body(req: &Request<'_>) -> Value {
+    fn body(req: &Request<'_>, json_schema: bool) -> Value {
+        let mut config = json!({
+            "responseMimeType": "application/json",
+            "maxOutputTokens": req.max_output_tokens,
+        });
+        if json_schema {
+            config["responseJsonSchema"] = req.schema.clone();
+        } else {
+            config["responseSchema"] = to_gemini_schema(req.schema);
+        }
         json!({
             "systemInstruction": { "parts": [{ "text": req.system }] },
             "contents": [{ "role": "user", "parts": [{ "text": req.user }] }],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "responseSchema": to_gemini_schema(req.schema),
-                "maxOutputTokens": req.max_output_tokens,
-            },
+            "generationConfig": config,
         })
+    }
+
+    async fn send(&self, url: &str, body: &Value) -> Result<Value, LlmError> {
+        let mut delay = self.backoff;
+        let mut last = LlmError::Unavailable("no attempt made".into());
+        for attempt in 0..=MAX_RETRIES {
+            if attempt > 0 {
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+            let resp = match self
+                .http
+                .post(url)
+                .header("x-goog-api-key", &self.key)
+                .json(body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    last = LlmError::Unavailable(error_chain(&e));
+                    continue;
+                }
+            };
+            let status = resp.status().as_u16();
+            if status == 429 || status >= 500 {
+                if let Some(wait) = retry_after(&resp) {
+                    delay = delay.max(wait);
+                }
+                last = if status == 429 {
+                    LlmError::RateLimited
+                } else {
+                    let body = resp.text().await.unwrap_or_default();
+                    let msg = if body.trim().is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {}", error_message(&body))
+                    };
+                    LlmError::Unavailable(format!("HTTP {status}{msg}"))
+                };
+                continue;
+            }
+            let text = resp
+                .text()
+                .await
+                .map_err(|e| LlmError::Unavailable(error_chain(&e)))?;
+            if status != 200 {
+                return Err(LlmError::Rejected {
+                    status,
+                    message: error_message(&text),
+                });
+            }
+            let v: Value =
+                serde_json::from_str(&text).map_err(|e| LlmError::BadOutput(e.to_string()))?;
+            return parse_response(&v);
+        }
+        Err(last)
     }
 }
 
@@ -138,6 +205,18 @@ pub fn error_message(body: &str) -> String {
     msg
 }
 
+/// A reqwest error with its causes ("error sending request" alone says
+/// nothing about DNS, TLS or timeouts).
+fn error_chain(e: &reqwest::Error) -> String {
+    let mut msg = e.to_string();
+    let mut source = std::error::Error::source(e);
+    while let Some(s) = source {
+        msg.push_str(&format!(": {s}"));
+        source = s.source();
+    }
+    msg
+}
+
 fn retry_after(resp: &reqwest::Response) -> Option<Duration> {
     let secs: u64 = resp
         .headers()
@@ -156,65 +235,49 @@ impl Judge for Gemini {
     }
 
     async fn generate_json(&self, req: &Request<'_>) -> Result<Value, LlmError> {
+        use std::sync::atomic::Ordering;
         let url = format!(
             "{}/v1beta/models/{}:generateContent",
             self.base_url, req.model
         );
-        let body = Self::body(req);
-        let mut delay = self.backoff;
-        let mut last = LlmError::Unavailable("no attempt made".into());
-        for attempt in 0..=MAX_RETRIES {
-            if attempt > 0 {
-                tokio::time::sleep(delay).await;
-                delay *= 2;
+        let form = self.json_schema.load(Ordering::Relaxed);
+        let name = |json: bool| {
+            if json {
+                "responseJsonSchema"
+            } else {
+                "responseSchema"
             }
-            let resp = match self
-                .http
-                .post(&url)
-                .header("x-goog-api-key", &self.key)
-                .json(&body)
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    last = LlmError::Unavailable(e.to_string());
-                    continue;
+        };
+        match self.send(&url, &Self::body(req, form)).await {
+            // Refused: try the other way of giving the schema once.
+            Err(LlmError::Rejected {
+                status: 400,
+                message,
+            }) => match self.send(&url, &Self::body(req, !form)).await {
+                Ok(v) => {
+                    eprintln!(
+                        "note: Gemini refused {} ({message}); {} worked",
+                        name(form),
+                        name(!form)
+                    );
+                    self.json_schema.store(!form, Ordering::Relaxed);
+                    Ok(v)
                 }
-            };
-            let status = resp.status().as_u16();
-            if status == 429 || status >= 500 {
-                if let Some(wait) = retry_after(&resp) {
-                    delay = delay.max(wait);
-                }
-                last = if status == 429 {
-                    LlmError::RateLimited
-                } else {
-                    let body = resp.text().await.unwrap_or_default();
-                    let msg = if body.trim().is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {}", error_message(&body))
-                    };
-                    LlmError::Unavailable(format!("HTTP {status}{msg}"))
-                };
-                continue;
-            }
-            let text = resp
-                .text()
-                .await
-                .map_err(|e| LlmError::Unavailable(e.to_string()))?;
-            if status != 200 {
-                return Err(LlmError::Rejected {
+                Err(LlmError::Rejected {
                     status,
-                    message: error_message(&text),
-                });
-            }
-            let v: Value =
-                serde_json::from_str(&text).map_err(|e| LlmError::BadOutput(e.to_string()))?;
-            return parse_response(&v);
+                    message: second,
+                }) => Err(LlmError::Rejected {
+                    status,
+                    message: format!(
+                        "with {}: {message}; with {}: {second}",
+                        name(form),
+                        name(!form)
+                    ),
+                }),
+                Err(e) => Err(e),
+            },
+            other => other,
         }
-        Err(last)
     }
 }
 

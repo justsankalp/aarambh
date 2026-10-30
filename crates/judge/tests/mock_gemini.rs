@@ -193,7 +193,8 @@ async fn client_errors_are_not_retried() {
             message: "model not found".into()
         }
     );
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    // One try per schema form, no backoff retries.
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }
 
 #[test]
@@ -584,5 +585,72 @@ async fn digest_writes_markdown_and_state_from_a_checked_answer() {
     assert!(
         text2.contains("\"Clinics have budget\""),
         "previous state is passed on"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_schema_form_is_retried_with_the_other_and_remembered() {
+    use wiremock::matchers::body_string_contains;
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("\"responseSchema\""))
+        .respond_with(ResponseTemplate::new(400).set_body_json(
+            json!({ "error": { "message": "Request contains an invalid argument." } }),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("\"responseJsonSchema\""))
+        .respond_with(answer(json!({ "ok": true })))
+        .mount(&server)
+        .await;
+    let g = gemini(&server).await;
+    let schema = json!({ "type": "object", "properties": { "ok": { "type": "boolean" } }, "required": ["ok"] });
+    let req = Request {
+        model: MODEL,
+        system: "",
+        user: "",
+        schema: &schema,
+        max_output_tokens: 10,
+    };
+    assert_eq!(g.generate_json(&req).await.unwrap(), json!({ "ok": true }));
+    let sent = bodies(&server).await;
+    assert_eq!(sent.len(), 2);
+    assert_eq!(
+        sent[1]["generationConfig"]["responseJsonSchema"]["type"], "object",
+        "plain JSON Schema, lowercase"
+    );
+    // The working form is used straight away next time.
+    g.generate_json(&req).await.unwrap();
+    assert_eq!(server.received_requests().await.unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn both_schema_forms_refused_reports_both() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(400).set_body_json(json!({ "error": { "message": "nope" } })),
+        )
+        .mount(&server)
+        .await;
+    let g = gemini(&server).await;
+    let schema = json!({ "type": "object" });
+    let err = g
+        .generate_json(&Request {
+            model: MODEL,
+            system: "",
+            user: "",
+            schema: &schema,
+            max_output_tokens: 10,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        LlmError::Rejected {
+            status: 400,
+            message: "with responseSchema: nope; with responseJsonSchema: nope".into()
+        }
     );
 }
