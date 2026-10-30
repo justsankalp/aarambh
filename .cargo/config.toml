@@ -1,0 +1,4 @@
+# Type-erases Leptos components in the web app: about 5% smaller wasm
+# (243 -> 232 KB gzipped at Phase 2) with no change in behaviour.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "erase_components"]
