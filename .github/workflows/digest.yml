@@ -1,0 +1,44 @@
+name: Digest
+
+# Summarises what's new since the last digest. Nightly at 02:30 UTC
+# (08:00 in India), and on demand from the app's "Summarise now" button.
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (version from rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: judge
+
+      - name: Build judge
+        run: cargo build --profile tool -p judge --locked
+
+      - name: Write the digest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIGEST_MODEL: ${{ vars.DIGEST_MODEL }}
+        run: target/tool/judge digest --data data
+
+      - name: Commit the digest
+        run: |
+          .github/scripts/commit-data.sh "digest: $(date -u +%F)" data/digests

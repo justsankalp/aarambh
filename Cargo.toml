@@ -20,3 +20,10 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
+
+# For the judge CLI in Actions: quick to compile, fast enough to run.
+# (The release profile above is tuned for wasm size, not build time.)
+[profile.tool]
+inherits = "dev"
+opt-level = 1
+debug = false
