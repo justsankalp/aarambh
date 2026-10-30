@@ -1,8 +1,10 @@
-//! Markdown to a small tree that the web app renders as DOM nodes, so no
-//! HTML string (and no `innerHTML`) is ever involved. Raw HTML in the source
-//! becomes plain text; links keep only http(s) and in-page targets.
-
-use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
+//! A small Markdown reader for digests, producing a tree that the web app
+//! renders as DOM nodes, so no HTML string (and no `innerHTML`) is involved.
+//!
+//! Digests are written by the judge's own renderer, so only that subset is
+//! understood: `#` headings, paragraphs, `-`/`*` and `1.` lists, `---`
+//! rules, `**strong**`, `*em*`/`_em_` and `` `code` ``. Anything else,
+//! including HTML and links, is shown as the literal text it is.
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Block {
@@ -11,10 +13,8 @@ pub enum Block {
     List {
         ordered: bool,
         start: u64,
-        items: Vec<Vec<Block>>,
+        items: Vec<Vec<Inline>>,
     },
-    Quote(Vec<Block>),
-    Code(String),
     Rule,
 }
 
@@ -24,218 +24,199 @@ pub enum Inline {
     Strong(Vec<Inline>),
     Emph(Vec<Inline>),
     Code(String),
-    /// `href` is `None` when the target wasn't safe to link to.
-    Link {
-        href: Option<String>,
-        children: Vec<Inline>,
+}
+
+enum Line<'a> {
+    Blank,
+    Heading(u8, &'a str),
+    Rule,
+    Item {
+        ordered: bool,
+        number: u64,
+        text: &'a str,
     },
-    Break,
+    Text(&'a str),
 }
 
-enum Open {
-    Para,
-    /// Text directly inside a tight list item.
-    Implicit,
-    Heading(u8),
-    Strong,
-    Emph,
-    Link(Option<String>),
-    /// Image alt text is kept as plain text.
-    Image,
-}
-
-#[derive(Default)]
-struct Builder {
-    /// Block containers: the document, list items and quotes.
-    blocks: Vec<Vec<Block>>,
-    inlines: Vec<(Open, Vec<Inline>)>,
-    lists: Vec<(bool, u64, Vec<Vec<Block>>)>,
-    code: Option<String>,
-}
-
-fn safe_href(url: &str) -> Option<String> {
-    let u = url.trim();
-    let lower = u.to_ascii_lowercase();
-    (lower.starts_with("https://") || lower.starts_with("http://") || u.starts_with('#'))
-        .then(|| u.to_owned())
-}
-
-impl Builder {
-    fn push_block(&mut self, b: Block) {
-        self.close_implicit();
-        self.blocks.last_mut().expect("root container").push(b);
+fn classify(raw: &str) -> Line<'_> {
+    let line = raw.trim();
+    if line.is_empty() {
+        return Line::Blank;
     }
-
-    fn close_implicit(&mut self) {
-        if matches!(self.inlines.last(), Some((Open::Implicit, _))) {
-            let (_, content) = self.inlines.pop().expect("checked above");
-            self.blocks
-                .last_mut()
-                .expect("root container")
-                .push(Block::Paragraph(content));
+    let hashes = line.bytes().take_while(|&b| b == b'#').count();
+    if (1..=6).contains(&hashes) && line[hashes..].starts_with(' ') {
+        return Line::Heading(hashes as u8, line[hashes..].trim());
+    }
+    let compact: String = line.chars().filter(|c| !c.is_whitespace()).collect();
+    if compact.len() >= 3
+        && ["-", "*", "_"]
+            .iter()
+            .any(|m| compact.chars().all(|c| c.to_string() == *m))
+    {
+        return Line::Rule;
+    }
+    for marker in ["- ", "* ", "+ "] {
+        if let Some(rest) = line.strip_prefix(marker) {
+            return Line::Item {
+                ordered: false,
+                number: 0,
+                text: rest.trim(),
+            };
         }
     }
-
-    fn inline(&mut self, i: Inline) {
-        if self.inlines.is_empty() {
-            self.inlines.push((Open::Implicit, Vec::new()));
-        }
-        self.inlines.last_mut().expect("just ensured").1.push(i);
-    }
-
-    fn open(&mut self, o: Open) {
-        if matches!(o, Open::Para | Open::Heading(_)) {
-            self.close_implicit();
-        } else if self.inlines.is_empty() {
-            self.inlines.push((Open::Implicit, Vec::new()));
-        }
-        self.inlines.push((o, Vec::new()));
-    }
-
-    fn close_inline(&mut self) {
-        let Some((kind, content)) = self.inlines.pop() else {
-            return;
+    let digits = line.bytes().take_while(u8::is_ascii_digit).count();
+    if (1..=9).contains(&digits)
+        && (line[digits..].starts_with(". ") || line[digits..].starts_with(") "))
+    {
+        let number = line[..digits].parse().unwrap_or(1);
+        return Line::Item {
+            ordered: true,
+            number,
+            text: line[digits + 2..].trim(),
         };
-        match kind {
-            Open::Para | Open::Implicit => self.push_block(Block::Paragraph(content)),
-            Open::Heading(l) => self.push_block(Block::Heading(l, content)),
-            Open::Strong => self.inline(Inline::Strong(content)),
-            Open::Emph => self.inline(Inline::Emph(content)),
-            Open::Link(href) => self.inline(Inline::Link {
-                href,
-                children: content,
-            }),
-            Open::Image => content.into_iter().for_each(|c| self.inline(c)),
-        }
     }
-
-    fn event(&mut self, ev: Event<'_>) {
-        if let Some(code) = self.code.as_mut() {
-            match ev {
-                Event::Text(t) => code.push_str(&t),
-                Event::End(TagEnd::CodeBlock) => {
-                    let c = self.code.take().unwrap_or_default();
-                    self.push_block(Block::Code(c.trim_end_matches('\n').to_owned()));
-                }
-                _ => {}
-            }
-            return;
-        }
-        match ev {
-            Event::Start(tag) => match tag {
-                Tag::Paragraph => self.open(Open::Para),
-                Tag::Heading { level, .. } => self.open(Open::Heading(match level {
-                    HeadingLevel::H1 => 1,
-                    HeadingLevel::H2 => 2,
-                    HeadingLevel::H3 => 3,
-                    HeadingLevel::H4 => 4,
-                    HeadingLevel::H5 => 5,
-                    HeadingLevel::H6 => 6,
-                })),
-                Tag::BlockQuote(_) | Tag::Item => {
-                    self.close_implicit();
-                    self.blocks.push(Vec::new());
-                }
-                Tag::List(start) => {
-                    self.close_implicit();
-                    self.lists
-                        .push((start.is_some(), start.unwrap_or(1), Vec::new()));
-                }
-                Tag::CodeBlock(_) => {
-                    self.close_implicit();
-                    self.code = Some(String::new());
-                }
-                Tag::Strong => self.open(Open::Strong),
-                Tag::Emphasis => self.open(Open::Emph),
-                Tag::Link { dest_url, .. } => self.open(Open::Link(safe_href(&dest_url))),
-                Tag::Image { .. } => self.open(Open::Image),
-                _ => {}
-            },
-            Event::End(end) => match end {
-                TagEnd::Paragraph
-                | TagEnd::Heading(_)
-                | TagEnd::Strong
-                | TagEnd::Emphasis
-                | TagEnd::Link
-                | TagEnd::Image => self.close_inline(),
-                TagEnd::Item => {
-                    self.close_implicit();
-                    let item = self.blocks.pop().unwrap_or_default();
-                    if let Some(l) = self.lists.last_mut() {
-                        l.2.push(item);
-                    }
-                }
-                TagEnd::List(_) => {
-                    if let Some((ordered, start, items)) = self.lists.pop() {
-                        self.push_block(Block::List {
-                            ordered,
-                            start,
-                            items,
-                        });
-                    }
-                }
-                TagEnd::BlockQuote(_) => {
-                    self.close_implicit();
-                    let inner = self.blocks.pop().unwrap_or_default();
-                    self.push_block(Block::Quote(inner));
-                }
-                _ => {}
-            },
-            Event::Text(t) | Event::Html(t) | Event::InlineHtml(t) => {
-                self.inline(Inline::Text(t.into_string()))
-            }
-            Event::Code(t) => self.inline(Inline::Code(t.into_string())),
-            Event::SoftBreak => self.inline(Inline::Text(" ".into())),
-            Event::HardBreak => self.inline(Inline::Break),
-            Event::Rule => self.push_block(Block::Rule),
-            _ => {}
-        }
-    }
+    Line::Text(line)
 }
 
 pub fn parse(text: &str) -> Vec<Block> {
-    let mut b = Builder {
-        blocks: vec![Vec::new()],
-        ..Default::default()
-    };
-    for ev in Parser::new(text) {
-        b.event(ev);
+    let mut out = Vec::new();
+    let mut para: Vec<&str> = Vec::new();
+    // (ordered, start, item texts)
+    let mut list: Option<(bool, u64, Vec<String>)> = None;
+
+    fn flush_para(para: &mut Vec<&str>, out: &mut Vec<Block>) {
+        if !para.is_empty() {
+            out.push(Block::Paragraph(inlines(&para.join(" "))));
+            para.clear();
+        }
     }
-    while !b.inlines.is_empty() {
-        b.close_inline();
+    fn flush_list(list: &mut Option<(bool, u64, Vec<String>)>, out: &mut Vec<Block>) {
+        if let Some((ordered, start, items)) = list.take() {
+            out.push(Block::List {
+                ordered,
+                start,
+                items: items.iter().map(|t| inlines(t)).collect(),
+            });
+        }
     }
-    let mut out = b.blocks.into_iter().next().unwrap_or_default();
-    merge_text(&mut out);
+
+    for raw in text.lines() {
+        match classify(raw) {
+            Line::Blank => {
+                flush_para(&mut para, &mut out);
+                flush_list(&mut list, &mut out);
+            }
+            Line::Heading(level, t) => {
+                flush_para(&mut para, &mut out);
+                flush_list(&mut list, &mut out);
+                out.push(Block::Heading(level, inlines(t)));
+            }
+            Line::Rule => {
+                flush_para(&mut para, &mut out);
+                flush_list(&mut list, &mut out);
+                out.push(Block::Rule);
+            }
+            Line::Item {
+                ordered,
+                number,
+                text,
+            } => {
+                flush_para(&mut para, &mut out);
+                if list.as_ref().is_some_and(|l| l.0 != ordered) {
+                    flush_list(&mut list, &mut out);
+                }
+                list.get_or_insert_with(|| (ordered, number.max(1), Vec::new()))
+                    .2
+                    .push(text.to_owned());
+            }
+            Line::Text(t) => match list.as_mut() {
+                // An indented line continues the previous list item.
+                Some(l) if raw.starts_with("  ") => {
+                    if let Some(last) = l.2.last_mut() {
+                        last.push(' ');
+                        last.push_str(t);
+                    }
+                }
+                _ => {
+                    flush_list(&mut list, &mut out);
+                    para.push(t);
+                }
+            },
+        }
+    }
+    flush_para(&mut para, &mut out);
+    flush_list(&mut list, &mut out);
     out
 }
 
-/// Joins adjacent text runs (the parser splits text at entities and HTML).
-fn merge_text(blocks: &mut [Block]) {
-    fn inlines(v: &mut Vec<Inline>) {
-        let mut out: Vec<Inline> = Vec::with_capacity(v.len());
-        for i in v.drain(..) {
-            match (out.last_mut(), i) {
-                (Some(Inline::Text(a)), Inline::Text(b)) => a.push_str(&b),
-                (_, mut other) => {
-                    if let Inline::Strong(c) | Inline::Emph(c) | Inline::Link { children: c, .. } =
-                        &mut other
-                    {
-                        inlines(c);
-                    }
-                    out.push(other);
-                }
-            }
+/// Inline emphasis and code spans. Unmatched markers stay as text.
+pub fn inlines(s: &str) -> Vec<Inline> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out: Vec<Inline> = Vec::new();
+    let mut text = String::new();
+    let mut i = 0;
+    let push_text = |text: &mut String, out: &mut Vec<Inline>| {
+        if !text.is_empty() {
+            out.push(Inline::Text(std::mem::take(text)));
         }
-        *v = out;
-    }
-    for b in blocks {
-        match b {
-            Block::Heading(_, v) | Block::Paragraph(v) => inlines(v),
-            Block::List { items, .. } => items.iter_mut().for_each(|i| merge_text(i)),
-            Block::Quote(inner) => merge_text(inner),
-            Block::Code(_) | Block::Rule => {}
+    };
+    let find = |from: usize, pat: &[char]| -> Option<usize> {
+        (from..=chars.len().saturating_sub(pat.len()))
+            .find(|&j| chars[j..j + pat.len()] == *pat && (j == 0 || chars[j - 1] != '\\'))
+    };
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\\' && chars.get(i + 1).is_some_and(|n| n.is_ascii_punctuation()) {
+            text.push(chars[i + 1]);
+            i += 2;
+            continue;
         }
+        if c == '`'
+            && let Some(end) = find(i + 1, &['`'])
+            && end > i + 1
+        {
+            push_text(&mut text, &mut out);
+            out.push(Inline::Code(chars[i + 1..end].iter().collect()));
+            i = end + 1;
+            continue;
+        }
+        if c == '*'
+            && chars.get(i + 1) == Some(&'*')
+            && let Some(end) = find(i + 2, &['*', '*'])
+            && end > i + 2
+        {
+            push_text(&mut text, &mut out);
+            out.push(Inline::Strong(inlines(
+                &chars[i + 2..end].iter().collect::<String>(),
+            )));
+            i = end + 2;
+            continue;
+        }
+        let word_start = i == 0 || !chars[i - 1].is_alphanumeric();
+        if (c == '*' || (c == '_' && word_start))
+            && chars
+                .get(i + 1)
+                .is_some_and(|n| !n.is_whitespace() && *n != c)
+            && let Some(end) = (i + 1..chars.len()).find(|&j| {
+                chars[j] == c
+                    && chars[j - 1] != '\\'
+                    && !chars[j - 1].is_whitespace()
+                    && chars.get(j + 1) != Some(&c)
+                    && (c == '*' || chars.get(j + 1).is_none_or(|n| !n.is_alphanumeric()))
+            })
+        {
+            push_text(&mut text, &mut out);
+            out.push(Inline::Emph(inlines(
+                &chars[i + 1..end].iter().collect::<String>(),
+            )));
+            i = end + 1;
+            continue;
+        }
+        text.push(c);
+        i += 1;
     }
+    push_text(&mut text, &mut out);
+    out
 }
 
 #[cfg(test)]
@@ -247,9 +228,9 @@ mod tests {
     }
 
     #[test]
-    fn headings_paragraphs_and_emphasis() {
+    fn headings_paragraphs_rules() {
         let doc = parse(
-            "# Friday\n\n## Summary · 02:30 UTC\n\nAsha **proposed** a *thing*\nand `code`.\n\n---\n",
+            "# Friday\n\n## Summary · 02:30 UTC\n\nAsha **proposed** a *thing*\nand `code`.\n\n---\n#nohash\n",
         );
         assert_eq!(
             doc,
@@ -266,94 +247,64 @@ mod tests {
                     t("."),
                 ]),
                 Block::Rule,
+                Block::Paragraph(vec![t("#nohash")]),
             ]
         );
     }
 
     #[test]
-    fn tight_and_ordered_lists() {
-        let doc = parse("- **Asha:** managers\n- *Underneath:* budgets\n\n2. one\n3. two\n");
-        let Block::List {
-            ordered: false,
-            items,
-            ..
-        } = &doc[0]
-        else {
-            panic!("{doc:?}")
-        };
-        assert_eq!(items.len(), 2);
+    fn lists() {
+        let doc = parse(
+            "- **Asha:** managers\n- *Underneath:* budgets\n  continued\n\n2. one\n3. two\nafter\n",
+        );
         assert_eq!(
-            items[0],
-            vec![Block::Paragraph(vec![
-                Inline::Strong(vec![t("Asha:")]),
-                t(" managers")
-            ])]
+            doc[0],
+            Block::List {
+                ordered: false,
+                start: 1,
+                items: vec![
+                    vec![Inline::Strong(vec![t("Asha:")]), t(" managers")],
+                    vec![
+                        Inline::Emph(vec![t("Underneath:")]),
+                        t(" budgets continued")
+                    ],
+                ],
+            }
         );
         assert_eq!(
             doc[1],
             Block::List {
                 ordered: true,
                 start: 2,
-                items: vec![
-                    vec![Block::Paragraph(vec![t("one")])],
-                    vec![Block::Paragraph(vec![t("two")])]
-                ],
+                items: vec![vec![t("one")], vec![t("two")]]
             }
         );
+        assert_eq!(doc[2], Block::Paragraph(vec![t("after")]));
     }
 
     #[test]
-    fn raw_html_is_kept_as_text() {
-        let doc = parse("Hi <img src=x onerror=alert(1)> there\n\n<script>alert(2)</script>\n");
-        let text = format!("{doc:?}");
-        assert!(text.contains("<img src=x onerror=alert(1)>"));
-        assert!(text.contains("<script>alert(2)</script>"));
-        assert!(
-            doc.iter().all(|b| matches!(b, Block::Paragraph(_))),
-            "{doc:?}"
-        );
+    fn html_and_links_are_just_text() {
+        let src =
+            "Hi <img src=x onerror=alert(1)> [x](javascript:alert(1)) <script>alert(2)</script>";
+        assert_eq!(parse(src), vec![Block::Paragraph(vec![t(src)])]);
     }
 
     #[test]
-    fn only_safe_links_keep_their_target() {
-        let doc = parse(
-            "[a](https://x.org) [b](javascript:alert(1)) [c](#n-1) [d](data:text/html,x) ![alt text](https://img)",
-        );
-        let Block::Paragraph(inl) = &doc[0] else {
-            panic!()
-        };
-        let links: Vec<_> = inl
-            .iter()
-            .filter_map(|i| match i {
-                Inline::Link { href, .. } => Some(href.clone()),
-                _ => None,
-            })
-            .collect();
+    fn unmatched_and_escaped_markers_stay_literal() {
+        assert_eq!(inlines("2 * 3 = 6"), vec![t("2 * 3 = 6")]);
         assert_eq!(
-            links,
+            inlines("snake_case_name stays"),
+            vec![t("snake_case_name stays")]
+        );
+        assert_eq!(inlines("a **b"), vec![t("a **b")]);
+        assert_eq!(inlines(r"\*not em\*"), vec![t("*not em*")]);
+        assert_eq!(
+            inlines("_em_ and **strong _nested_**"),
             vec![
-                Some("https://x.org".into()),
-                None,
-                Some("#n-1".into()),
-                None
+                Inline::Emph(vec![t("em")]),
+                t(" and "),
+                Inline::Strong(vec![t("strong "), Inline::Emph(vec![t("nested")])]),
             ]
         );
-        assert!(
-            inl.contains(&t(" alt text")),
-            "image becomes its alt text: {inl:?}"
-        );
-    }
-
-    #[test]
-    fn quotes_and_code_blocks() {
-        let doc = parse("> quoted **bold**\n\n```\nlet x = 1;\n```\n");
-        assert_eq!(
-            doc[0],
-            Block::Quote(vec![Block::Paragraph(vec![
-                t("quoted "),
-                Inline::Strong(vec![t("bold")])
-            ])])
-        );
-        assert_eq!(doc[1], Block::Code("let x = 1;".into()));
     }
 }

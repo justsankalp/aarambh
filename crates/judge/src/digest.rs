@@ -665,6 +665,76 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_app_reads_rendered_digests_as_intended() {
+        use aarambh_core::markdown::{Block, Inline, parse};
+        let d = Draft {
+            brief: "Asha proposed *clinic* work; 2 * 3 is not emphasis.".into(),
+            moved: vec!["One".into(), "Two".into()],
+            diverge: vec![Disagreement {
+                topic: "Who buys".into(),
+                positions: vec![
+                    Position {
+                        who: "Asha".into(),
+                        says: "Managers".into(),
+                    },
+                    Position {
+                        who: "Sankalp".into(),
+                        says: "Owners".into(),
+                    },
+                ],
+                assumption: "Managers hold budgets".into(),
+                note_ids: vec![],
+            }],
+            next_moves: vec!["Call three owners".into()],
+            ..Default::default()
+        };
+        let md = format!(
+            "# {}\n\n{}",
+            day_heading("2026-10-30".parse().unwrap()),
+            render_block(&d, Timestamp(1_761_843_481_000))
+        );
+        let doc = parse(&md);
+        let headings: Vec<String> = doc
+            .iter()
+            .filter_map(|b| match b {
+                Block::Heading(l, i) => Some(format!("{l}:{i:?}")),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(headings.len(), 7, "{headings:#?}");
+        assert!(doc.contains(&Block::Paragraph(vec![
+            Inline::Text("Asha proposed ".into()),
+            Inline::Emph(vec![Inline::Text("clinic".into())]),
+            Inline::Text(" work; 2 * 3 is not emphasis.".into()),
+        ])));
+        assert!(
+            doc.contains(&Block::Paragraph(vec![Inline::Strong(vec![Inline::Text(
+                "Who buys".into()
+            )])]))
+        );
+        assert!(doc.contains(&Block::List {
+            ordered: true,
+            start: 1,
+            items: vec![vec![Inline::Text("Call three owners".into())]]
+        }));
+        let positions = doc.iter().find_map(|b| match b {
+            Block::List {
+                ordered: false,
+                items,
+                ..
+            } if items.len() == 3 => Some(items.clone()),
+            _ => None,
+        });
+        assert_eq!(
+            positions.unwrap()[2],
+            vec![
+                Inline::Emph(vec![Inline::Text("Underneath:".into())]),
+                Inline::Text(" Managers hold budgets".into())
+            ]
+        );
+    }
+
+    #[test]
     fn day_headings() {
         assert_eq!(
             day_heading("1970-01-01".parse().unwrap()),

@@ -32,14 +32,6 @@ fn inlines(v: Vec<Inline>) -> AnyView {
             Inline::Code(s) => view! { <code>{s}</code> }.into_any(),
             Inline::Strong(c) => view! { <strong>{inlines(c)}</strong> }.into_any(),
             Inline::Emph(c) => view! { <em>{inlines(c)}</em> }.into_any(),
-            Inline::Break => view! { <br /> }.into_any(),
-            Inline::Link { href: Some(h), children } if h.starts_with('#') => {
-                view! { <a href=h>{inlines(children)}</a> }.into_any()
-            }
-            Inline::Link { href: Some(h), children } => {
-                view! { <a href=h target="_blank" rel="noopener noreferrer">{inlines(children)}</a> }.into_any()
-            }
-            Inline::Link { href: None, children } => view! { <span>{inlines(children)}</span> }.into_any(),
         })
         .collect_view()
         .into_any()
@@ -57,16 +49,14 @@ fn blocks(v: Vec<Block>) -> AnyView {
             Block::Paragraph(i) => view! { <p>{inlines(i)}</p> }.into_any(),
             Block::List { ordered: true, start, items } => view! {
                 <ol start=start.to_string()>
-                    {items.into_iter().map(|it| view! { <li>{blocks(it)}</li> }).collect_view()}
+                    {items.into_iter().map(|it| view! { <li>{inlines(it)}</li> }).collect_view()}
                 </ol>
             }
             .into_any(),
             Block::List { ordered: false, items, .. } => view! {
-                <ul>{items.into_iter().map(|it| view! { <li>{blocks(it)}</li> }).collect_view()}</ul>
+                <ul>{items.into_iter().map(|it| view! { <li>{inlines(it)}</li> }).collect_view()}</ul>
             }
             .into_any(),
-            Block::Quote(inner) => view! { <blockquote>{blocks(inner)}</blockquote> }.into_any(),
-            Block::Code(s) => view! { <pre><code>{s}</code></pre> }.into_any(),
             Block::Rule => view! { <hr /> }.into_any(),
         })
         .collect_view()

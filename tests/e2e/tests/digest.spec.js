@@ -73,15 +73,14 @@ test("counts notes written since the last summary", async ({ page }) => {
   await expect(page.locator(".digest-bar")).toContainText("2 new notes since this summary.");
 });
 
-test("HTML and unsafe links in a digest are shown as text, never run", async ({ page }) => {
+test("HTML and links in a digest are shown as text, never run", async ({ page }) => {
   const evil = `# Day\n\nHi <img src=x onerror="window.__xss=1"> and [click](javascript:window.__xss=2) and [ok](https://example.org)\n\n<script>window.__xss=3</script>\n`;
   await openDigest(page, { files: files({ [`data/digests/${day(0)}.md`]: evil }) });
   const digest = page.locator("article.digest");
   await expect(digest).toContainText(`<img src=x onerror="window.__xss=1">`);
   await expect(digest).toContainText("<script>window.__xss=3</script>");
-  await expect(digest.locator("img, script")).toHaveCount(0);
-  await expect(digest.getByText("click")).not.toHaveAttribute("href", /.*/);
-  await expect(digest.getByRole("link", { name: "ok" })).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(digest).toContainText("[click](javascript:window.__xss=2)");
+  await expect(digest.locator("img, script, a")).toHaveCount(0);
   await digest.getByText("click").click();
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
 });

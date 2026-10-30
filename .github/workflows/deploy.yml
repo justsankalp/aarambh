@@ -34,7 +34,7 @@ jobs:
           tool: trunk@0.22.1
 
       - name: Test core
-        run: cargo test -p aarambh-core --all-features --locked
+        run: cargo test -p aarambh-core --locked
 
       - name: Build
         run: |
