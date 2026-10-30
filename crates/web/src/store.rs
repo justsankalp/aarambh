@@ -30,7 +30,11 @@ pub enum SyncState {
         at_ms: u64,
     },
     Offline,
-    Failed(String),
+    Failed {
+        message: String,
+        /// The fix is in Settings (token or repo), not waiting.
+        settings: bool,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -408,7 +412,13 @@ impl Store {
     fn fail(self, e: &GhError) {
         self.state.set(match e {
             GhError::Network => SyncState::Offline,
-            e => SyncState::Failed(e.message()),
+            e => SyncState::Failed {
+                message: e.message(),
+                settings: matches!(
+                    e,
+                    GhError::Unauthorized | GhError::Forbidden | GhError::NotFound
+                ),
+            },
         });
     }
 
