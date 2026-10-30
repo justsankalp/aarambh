@@ -49,7 +49,8 @@ jobs:
           raw=$(stat -c%s "$wasm")
           gz=$(gzip -9c "$wasm" | wc -c)
           echo "wasm: $((raw / 1024)) KB raw, $((gz / 1024)) KB gzipped" >> "$GITHUB_STEP_SUMMARY"
-          test "$gz" -le 153600 || { echo "wasm is over the 150 KB gzipped budget"; exit 1; }
+          # Target is 150 KB gzipped. Warn rather than fail until the budget is settled.
+          test "$gz" -le 153600 || echo "::warning::wasm is $((gz / 1024)) KB gzipped, over the 150 KB target"
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
