@@ -1,4 +1,4 @@
-//! Shared bits and the Map and Digest tabs (filled in by later phases).
+//! Shared bits and the Map tab (filled in by Phase 4).
 
 use leptos::prelude::*;
 
@@ -42,13 +42,5 @@ pub fn MapView() -> impl IntoView {
     view! {
         <h2>"Map"</h2>
         <p class="lede">"How your ideas connect and where they stand. Coming soon."</p>
-    }
-}
-
-#[component]
-pub fn DigestView() -> impl IntoView {
-    view! {
-        <h2>"Digest"</h2>
-        <p class="lede">"A daily summary of what moved. Coming soon."</p>
     }
 }

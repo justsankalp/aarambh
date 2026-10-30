@@ -20,6 +20,10 @@ pub const META_REPO: &str = "repo";
 pub const META_EVENTS_ETAG: &str = "events_etag";
 pub const META_TAXONOMY: &str = "taxonomy";
 pub const META_TAXONOMY_ETAG: &str = "taxonomy_etag";
+pub const META_DIGESTS: &str = "digests";
+pub const META_DIGESTS_ETAG: &str = "digests_etag";
+pub const META_DIGEST_STATE: &str = "digest_state";
+pub const META_DIGEST_STATE_ETAG: &str = "digest_state_etag";
 
 /// A repo file as last fetched.
 #[derive(Serialize, Deserialize, Clone, Debug)]

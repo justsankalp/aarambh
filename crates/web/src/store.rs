@@ -6,6 +6,7 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
+use aarambh_core::digest::{DIGESTS_DIR, DigestState, STATE_PATH, digest_date};
 use aarambh_core::sync::{INITIAL_DAYS, day_from_events_file};
 use aarambh_core::{Day, Event, EventBody, Id, Log, Taxonomy, Timestamp, parse_day_file};
 use leptos::prelude::*;
@@ -40,6 +41,9 @@ pub struct Store {
     pub queued: RwSignal<BTreeSet<Id>>,
     /// Failure modes for post-mortems, from the repo once fetched.
     pub taxonomy: RwSignal<Taxonomy>,
+    /// Digest files as (date, blob sha), newest first.
+    pub digests: RwSignal<Vec<(String, String)>>,
+    pub digest_state: RwSignal<Option<DigestState>>,
     /// Entries in day files this version couldn't read.
     pub skipped: RwSignal<usize>,
     pub days_loaded: RwSignal<i64>,
@@ -69,6 +73,8 @@ impl Store {
             state: RwSignal::new(SyncState::Starting),
             queued: RwSignal::new(BTreeSet::new()),
             taxonomy: RwSignal::new(Taxonomy::default()),
+            digests: RwSignal::new(Vec::new()),
+            digest_state: RwSignal::new(None),
             skipped: RwSignal::new(0),
             days_loaded: RwSignal::new(INITIAL_DAYS),
             has_older: RwSignal::new(false),
@@ -108,6 +114,113 @@ impl Store {
         {
             self.taxonomy.set(t);
         }
+        if let Some(list) = cache::get(cache::META, cache::META_DIGESTS)
+            .await
+            .ok()
+            .flatten()
+            && let Ok(list) = serde_json::from_str(&list)
+        {
+            self.digests.set(list);
+        }
+        if let Some(s) = cache::get(cache::META, cache::META_DIGEST_STATE)
+            .await
+            .ok()
+            .flatten()
+        {
+            self.digest_state.set(DigestState::parse(&s).ok());
+        }
+    }
+
+    /// Re-reads the list of digests and state.json (both conditional).
+    pub async fn refresh_digests(self) -> Result<(), GhError> {
+        let settings = self.settings.get_untracked();
+        let Some(gh) = settings.client() else {
+            return Ok(());
+        };
+        let etag = cache::get(cache::META, cache::META_DIGESTS_ETAG)
+            .await
+            .ok()
+            .flatten()
+            .filter(|e| !e.is_empty());
+        match gh.list_dir(DIGESTS_DIR, etag.as_deref()).await? {
+            Fetched::Found((entries, etag)) => {
+                let mut list: Vec<(String, String)> = entries
+                    .into_iter()
+                    .filter_map(|e| Some((digest_date(&e.name)?.to_owned(), e.sha)))
+                    .collect();
+                list.sort_by(|a, b| b.0.cmp(&a.0));
+                if let Ok(json) = serde_json::to_string(&list) {
+                    let _ = cache::put(cache::META, cache::META_DIGESTS, &json).await;
+                }
+                let _ = cache::put(
+                    cache::META,
+                    cache::META_DIGESTS_ETAG,
+                    etag.as_deref().unwrap_or(""),
+                )
+                .await;
+                self.digests.set(list);
+            }
+            Fetched::Missing => self.digests.set(Vec::new()),
+            Fetched::NotModified => {}
+        }
+        let etag = cache::get(cache::META, cache::META_DIGEST_STATE_ETAG)
+            .await
+            .ok()
+            .flatten()
+            .filter(|e| !e.is_empty());
+        if let Fetched::Found(f) = gh.get_file(STATE_PATH, etag.as_deref()).await? {
+            let _ = cache::put(cache::META, cache::META_DIGEST_STATE, &f.text).await;
+            let _ = cache::put(
+                cache::META,
+                cache::META_DIGEST_STATE_ETAG,
+                f.etag.as_deref().unwrap_or(""),
+            )
+            .await;
+            self.digest_state.set(DigestState::parse(&f.text).ok());
+        }
+        Ok(())
+    }
+
+    /// A digest's Markdown, from the cache when its sha hasn't changed.
+    pub async fn digest_text(self, date: String, sha: String) -> Result<String, GhError> {
+        let key = format!("digest:{date}");
+        if let Some(c) = cache::get(cache::META, &key).await.ok().flatten()
+            && let Ok(c) = serde_json::from_str::<cache::CachedFile>(&c)
+            && c.sha == sha
+        {
+            return Ok(c.text);
+        }
+        let gh = self
+            .settings
+            .get_untracked()
+            .client()
+            .ok_or(GhError::Unauthorized)?;
+        match gh
+            .get_file(&format!("{DIGESTS_DIR}/{date}.md"), None)
+            .await?
+        {
+            Fetched::Found(f) => {
+                let cached = cache::CachedFile {
+                    sha: f.sha,
+                    text: f.text.clone(),
+                };
+                if let Ok(json) = serde_json::to_string(&cached) {
+                    let _ = cache::put(cache::META, &key, &json).await;
+                }
+                Ok(f.text)
+            }
+            _ => Err(GhError::NotFound),
+        }
+    }
+
+    /// Starts the digest workflow.
+    pub async fn summarise_now(self) -> Result<(), GhError> {
+        let gh = self
+            .settings
+            .get_untracked()
+            .client()
+            .ok_or(GhError::Unauthorized)?;
+        gh.dispatch_workflow("digest.yml").await
     }
 
     pub fn pending(self) -> usize {

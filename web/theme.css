@@ -589,6 +589,116 @@ hr.soft {
   margin-top: 20px;
 }
 
+/* ---- Digest ----------------------------------------------------------- */
+
+.digest-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.date-pick {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.date-pick select {
+  min-height: var(--tap);
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: 500 16px/1 var(--sans);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.digest-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.digest-bar p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.digest {
+  padding: 20px 22px;
+}
+
+.digest h3 {
+  margin: 0 0 4px;
+  font: 600 20px/1.3 var(--sans);
+}
+
+.digest h4 {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font: 600 14px/1.3 var(--sans);
+  letter-spacing: 0.02em;
+}
+
+.digest h5 {
+  margin: 20px 0 6px;
+  color: var(--sage);
+  font: 600 15px/1.3 var(--sans);
+}
+
+.digest p,
+.digest li {
+  font: 400 17px/1.6 var(--serif);
+  overflow-wrap: anywhere;
+}
+
+.digest p {
+  margin: 0 0 10px;
+}
+
+.digest ul,
+.digest ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.digest li > p {
+  margin: 0;
+}
+
+.digest li + li {
+  margin-top: 6px;
+}
+
+.digest strong {
+  font-weight: 600;
+}
+
+.digest em {
+  color: var(--muted);
+}
+
+.digest hr {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.digest-foot {
+  margin-top: 12px;
+}
+
 /* ---- Primary action ---------------------------------------------------- */
 
 .fab {

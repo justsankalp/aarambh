@@ -251,6 +251,22 @@ impl Gh {
         }
     }
 
+    /// Starts a workflow on main (the digest's "Summarise now").
+    pub async fn dispatch_workflow(&self, file: &str) -> Result<(), GhError> {
+        let url = format!(
+            "{}/actions/workflows/{file}/dispatches",
+            self.repo.api_base()
+        );
+        let r = self
+            .send("POST", &url, Some(r#"{"ref":"main"}"#), None)
+            .await?;
+        if r.status == 204 || r.status == 200 {
+            Ok(())
+        } else {
+            Err(Self::error_for(&r))
+        }
+    }
+
     /// Creates or updates a file. `sha` must be the current blob sha when the
     /// file exists; a stale sha gives `Conflict`. Returns the new sha.
     pub async fn put_file(

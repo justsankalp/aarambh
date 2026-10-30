@@ -1,6 +1,7 @@
 mod app;
 mod cache;
 mod compose;
+mod digest;
 mod feed;
 mod github;
 mod settings;
