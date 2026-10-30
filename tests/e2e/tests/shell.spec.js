@@ -82,7 +82,11 @@ test.describe("local-first", () => {
     gh.log.length = 0;
     await page.reload();
     await expect(page.locator(".sync-line")).toContainText("Synced");
-    expect(gh.log).toEqual(["GET /repos/justsankalp/aarambh/contents/data/events (etag)"]);
+    // The listing is conditional; the taxonomy is fetched too (404 here, as the mock repo has none).
+    expect(gh.log.sort()).toEqual([
+      "GET /repos/justsankalp/aarambh/contents/data/events (etag)",
+      "GET /repos/justsankalp/aarambh/contents/data/taxonomy.toml",
+    ]);
   });
 });
 

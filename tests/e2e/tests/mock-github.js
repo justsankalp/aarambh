@@ -41,6 +41,7 @@ const CORS = {
  *   conflicts: how many PUTs to answer 409 (another device "wins" each time)
  */
 export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
+  const isWebKit = page.context().browser()?.browserType().name() === "webkit";
   const state = {
     files: new Map(Object.entries(files).map(([p, text]) => [p, { text, sha: sha1(text) }])),
     conflicts,
@@ -80,7 +81,9 @@ export async function mockGitHub(page, { files = {}, conflicts = 0 } = {}) {
         .map(([p, f]) => ({ type: "file", name: p.split("/").pop(), path: p, sha: f.sha }));
       if (!entries.length) return json(404, { message: "Not Found" });
       const etag = `"${sha1(entries.map((e) => e.sha).join())}"`;
-      if (headers["if-none-match"] === etag) return route.fulfill({ status: 304, headers: { ...CORS, etag } });
+      // Playwright can't fulfill a 304 in WebKit; a 200 is what a browser
+      // without the ETag would get, so the app must cope with it anyway.
+      if (headers["if-none-match"] === etag && !isWebKit) return route.fulfill({ status: 304, headers: { ...CORS, etag } });
       return json(200, entries, { etag });
     }
 
