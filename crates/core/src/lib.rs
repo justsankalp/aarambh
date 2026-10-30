@@ -3,6 +3,7 @@
 pub mod digest;
 pub mod event;
 pub mod feed;
+pub mod graph;
 pub mod id;
 pub mod judging;
 pub mod judgment;
