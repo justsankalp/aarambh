@@ -11,6 +11,9 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="aarambh" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <!-- Runs before anything paints: picks the theme so there is no flash,
          keeps following the system setting, and registers the service worker. -->
     <script>
@@ -30,10 +33,18 @@
         else dark.addListener(apply);
         window.addEventListener("storage", apply);
         window.aarambhApplyTheme = apply;
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register("sw.js").catch(function () {});
+          });
+        }
       })();
     </script>
     <link data-trunk rel="css" href="theme.css" />
     <link data-trunk rel="rust" href="../crates/web/Cargo.toml" data-bin="aarambh-web" data-wasm-opt="z" />
+    <link data-trunk rel="copy-file" href="manifest.webmanifest" />
+    <link data-trunk rel="copy-file" href="sw.js" />
+    <link data-trunk rel="copy-dir" href="icons" />
   </head>
   <body>
     <div id="boot" class="boot" aria-hidden="true">
