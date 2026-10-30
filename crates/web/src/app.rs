@@ -4,10 +4,13 @@
 use leptos::ev;
 use leptos::prelude::*;
 
+use crate::compose::{ComposeSheet, Composer, track_keyboard_inset};
+use crate::feed::NotesView;
 use crate::settings::{Settings, SettingsView};
+use crate::status::{StatusSheet, StatusSheetView};
 use crate::store::Store;
 use crate::util::location_hash;
-use crate::views::{DigestView, MapView, NotesView};
+use crate::views::{DigestView, MapView};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
@@ -57,7 +60,11 @@ pub fn App() -> impl IntoView {
     let settings = RwSignal::new(Settings::load());
     let store = Store::new(settings);
     provide_context(store);
+    let composer = Composer::new();
+    provide_context(composer);
+    provide_context(StatusSheet::new());
     store.start();
+    track_keyboard_inset();
 
     // First run: go straight to settings.
     if !settings.get_untracked().is_complete() && location_hash().is_empty() {
@@ -113,6 +120,26 @@ pub fn App() -> impl IntoView {
                 }.into_any(),
             }}
         </main>
+        <Show when=move || tab.get() == Tab::Notes>
+            <button
+                type="button"
+                class="fab"
+                aria-label="New note"
+                on:click=move |_| {
+                    if settings.with_untracked(Settings::is_complete) {
+                        composer.open_new();
+                    } else {
+                        let _ = window().location().set_hash("settings");
+                    }
+                }
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+            </button>
+        </Show>
+        <ComposeSheet />
+        <StatusSheetView />
         <nav class="tabs" aria-label="Sections">
             {Tab::MAIN.map(|t| view! {
                 <a class="tab" href=t.href() aria-current=current(tab, t)>{t.label()}</a>

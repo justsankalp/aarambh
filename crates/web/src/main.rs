@@ -1,7 +1,10 @@
 mod app;
 mod cache;
+mod compose;
+mod feed;
 mod github;
 mod settings;
+mod status;
 mod store;
 mod theme;
 mod util;
