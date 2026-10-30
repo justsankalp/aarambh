@@ -4,19 +4,20 @@
 //! flushed to the repo whenever we're online.
 
 use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use aarambh_core::sync::{INITIAL_DAYS, day_from_events_file};
-use aarambh_core::{Day, Event, Log, Timestamp, parse_day_file};
+use aarambh_core::{Day, Event, EventBody, Id, Log, Taxonomy, Timestamp, parse_day_file};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::cache;
-use crate::github::{Fetched, GhError};
+use crate::github::{Fetched, Gh, GhError};
 use crate::settings::Settings;
-use crate::util::now_ms;
+use crate::util::{now_ms, random_u128};
 
 const EVENTS_DIR: &str = "data/events";
+const TAXONOMY_PATH: &str = "data/taxonomy.toml";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SyncState {
@@ -36,7 +37,9 @@ pub struct Store {
     pub log: RwSignal<Log>,
     pub state: RwSignal<SyncState>,
     /// Posts not yet in the repo.
-    pub pending: RwSignal<usize>,
+    pub queued: RwSignal<BTreeSet<Id>>,
+    /// Failure modes for post-mortems, from the repo once fetched.
+    pub taxonomy: RwSignal<Taxonomy>,
     /// Entries in day files this version couldn't read.
     pub skipped: RwSignal<usize>,
     pub days_loaded: RwSignal<i64>,
@@ -64,7 +67,8 @@ impl Store {
         Store {
             log: RwSignal::new(Log::new()),
             state: RwSignal::new(SyncState::Starting),
-            pending: RwSignal::new(0),
+            queued: RwSignal::new(BTreeSet::new()),
+            taxonomy: RwSignal::new(Taxonomy::default()),
             skipped: RwSignal::new(0),
             days_loaded: RwSignal::new(INITIAL_DAYS),
             has_older: RwSignal::new(false),
@@ -90,12 +94,52 @@ impl Store {
             }
         }
         let queued = queued_events().await;
-        self.pending.set(queued.len());
+        self.queued.set(queued.iter().map(|e| e.id).collect());
         events.extend(queued);
         self.log.update(|l| {
             l.extend(events);
         });
         self.skipped.set(skipped);
+        if let Some(t) = cache::get(cache::META, cache::META_TAXONOMY)
+            .await
+            .ok()
+            .flatten()
+            && let Ok(t) = Taxonomy::parse(&t)
+        {
+            self.taxonomy.set(t);
+        }
+    }
+
+    pub fn pending(self) -> usize {
+        self.queued.with(BTreeSet::len)
+    }
+
+    /// A new event by this device's person, timestamped now.
+    pub fn new_event(self, body: EventBody) -> Event {
+        let name = self.settings.with_untracked(|s| s.name.trim().to_owned());
+        Event::new(Id::new(now_ms(), random_u128()), name, body)
+    }
+
+    async fn refresh_taxonomy(self, gh: &Gh) {
+        let etag = cache::get(cache::META, cache::META_TAXONOMY_ETAG)
+            .await
+            .ok()
+            .flatten();
+        if let Ok(Fetched::Found(f)) = gh.get_file(TAXONOMY_PATH, etag.as_deref()).await {
+            match Taxonomy::parse(&f.text) {
+                Ok(t) => {
+                    self.taxonomy.set(t);
+                    let _ = cache::put(cache::META, cache::META_TAXONOMY, &f.text).await;
+                    let _ = cache::put(
+                        cache::META,
+                        cache::META_TAXONOMY_ETAG,
+                        f.etag.as_deref().unwrap_or(""),
+                    )
+                    .await;
+                }
+                Err(e) => leptos::logging::warn!("{e}; keeping the previous failure modes"),
+            }
+        }
     }
 
     /// Refresh, then flush anything queued.
@@ -122,7 +166,9 @@ impl Store {
         self.log.update(|l| {
             l.insert(event.clone());
         });
-        self.pending.update(|n| *n += 1);
+        self.queued.update(|q| {
+            q.insert(event.id);
+        });
         spawn_local(async move {
             if let Ok(json) = serde_json::to_string(&event) {
                 let _ = cache::put(cache::QUEUE, &event.id.to_string(), &json).await;
@@ -144,7 +190,7 @@ impl Store {
         } else {
             Vec::new()
         };
-        self.pending.set(queued.len());
+        self.queued.set(queued.iter().map(|e| e.id).collect());
         self.log.set({
             let mut l = Log::new();
             l.extend(queued);
@@ -185,6 +231,7 @@ impl Store {
                 let _ = cache::put(cache::META, cache::META_REPO, &repo).await;
             }
             self.state.set(SyncState::Syncing);
+            self.refresh_taxonomy(&gh).await;
 
             let etag = cache::get(cache::META, cache::META_EVENTS_ETAG)
                 .await
@@ -250,7 +297,7 @@ impl Store {
             // stops a broken queue store from looping forever.
             for _ in 0..3 {
                 let queued = queued_events().await;
-                self.pending.set(queued.len());
+                self.queued.set(queued.iter().map(|e| e.id).collect());
                 if queued.is_empty() {
                     return;
                 }
@@ -274,7 +321,11 @@ impl Store {
                             let ids: Vec<String> =
                                 events.iter().map(|e| e.id.to_string()).collect();
                             let _ = cache::delete(cache::QUEUE, &ids).await;
-                            self.pending.update(|n| *n = n.saturating_sub(ids.len()));
+                            self.queued.update(|q| {
+                                for e in &events {
+                                    q.remove(&e.id);
+                                }
+                            });
                             wrote_any = true;
                         }
                         Err(e) => {

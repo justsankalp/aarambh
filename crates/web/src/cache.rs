@@ -18,6 +18,8 @@ const STORES: [&str; 3] = [FILES, QUEUE, META];
 
 pub const META_REPO: &str = "repo";
 pub const META_EVENTS_ETAG: &str = "events_etag";
+pub const META_TAXONOMY: &str = "taxonomy";
+pub const META_TAXONOMY_ETAG: &str = "taxonomy_etag";
 
 /// A repo file as last fetched.
 #[derive(Serialize, Deserialize, Clone, Debug)]

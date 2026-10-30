@@ -24,7 +24,7 @@ pub fn SyncLine() -> impl IntoView {
     });
     let text = move || {
         let now = tick.get();
-        let pending = store.pending.get();
+        let pending = store.queued.with(|q| q.len());
         let waiting = (pending > 0).then(|| format!(" · {pending} waiting to send"));
         let base = match store.state.get() {
             SyncState::Starting | SyncState::Syncing => "Syncing…".to_owned(),

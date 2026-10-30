@@ -10,4 +10,7 @@ publish.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ulid.workspace = true
+
+[dev-dependencies]
+# Cross-checks the small taxonomy parser; not shipped in the web app.
 toml.workspace = true
