@@ -6,7 +6,8 @@
     "build": "cd ../.. && trunk build --release --dist tests/e2e/.site/aarambh",
     "test": "npm run build && playwright test --project=chromium && npm run test:webkit",
     "test:chromium": "playwright test --project=chromium",
-    "test:webkit": "cd ../.. && podman run --rm --network host --ipc host --security-opt label=disable -v \"$PWD\":/work -w /work/tests/e2e mcr.microsoft.com/playwright:v1.64.1-noble npx playwright test --project=webkit"
+    "test:webkit": "cd ../.. && podman run --rm --network host --ipc host --security-opt label=disable -v \"$PWD\":/work -w /work/tests/e2e mcr.microsoft.com/playwright:v1.64.1-noble npx playwright test --project=webkit",
+    "perf": "PERF=1 playwright test tests/perf.spec.js --project=chromium"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1"

@@ -2,6 +2,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
+import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), ".site");
@@ -23,8 +24,14 @@ createServer(async (req, res) => {
   const file = normalize(join(root, path));
   if (!file.startsWith(root)) return res.writeHead(403).end();
   try {
-    const body = await readFile(file);
-    res.writeHead(200, { "content-type": types[extname(file)] || "application/octet-stream", "cache-control": "no-cache" });
+    let body = await readFile(file);
+    const headers = { "content-type": types[extname(file)] || "application/octet-stream", "cache-control": "no-cache" };
+    // Compress like the real host does, so throttled timings are realistic.
+    if (/\bgzip\b/.test(req.headers["accept-encoding"] || "") && /\.(wasm|js|css|html|svg|webmanifest)$/.test(file)) {
+      body = gzipSync(body, { level: 9 });
+      headers["content-encoding"] = "gzip";
+    }
+    res.writeHead(200, headers);
     res.end(body);
   } catch {
     res.writeHead(404).end("not found");
