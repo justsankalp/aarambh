@@ -117,6 +117,133 @@ impl Gemini {
     }
 }
 
+/// Removes a key everywhere in a schema (for the probe's variants).
+fn without(v: &Value, key: &str) -> Value {
+    match v {
+        Value::Object(m) => Value::Object(
+            m.iter()
+                .filter(|(k, _)| *k != key)
+                .map(|(k, v)| (k.clone(), without(v, key)))
+                .collect(),
+        ),
+        Value::Array(a) => Value::Array(a.iter().map(|v| without(v, key)).collect()),
+        other => other.clone(),
+    }
+}
+
+impl Gemini {
+    async fn send_once(&self, url: &str, body: &Value) -> String {
+        match self
+            .http
+            .post(url)
+            .header("x-goog-api-key", &self.key)
+            .json(body)
+            .send()
+            .await
+        {
+            Err(e) => format!("no response: {}", error_chain(&e)),
+            Ok(r) => {
+                let status = r.status().as_u16();
+                let text = r.text().await.unwrap_or_default();
+                if status == 200 {
+                    "ok".into()
+                } else {
+                    format!("HTTP {status}: {}", error_message(&text))
+                }
+            }
+        }
+    }
+
+    /// Sends small requests that add one part of a real request at a time,
+    /// and lists the models this key can use, to show what Gemini refuses.
+    pub async fn probe(&self, model: &str, schema: &Value) -> Vec<(String, String)> {
+        let url = format!("{}/v1beta/models/{model}:generateContent", self.base_url);
+        let contents =
+            json!([{ "role": "user", "parts": [{ "text": "Reply with a JSON object." }] }]);
+        let small = json!({ "type": "OBJECT", "properties": { "ok": { "type": "BOOLEAN" } }, "required": ["ok"] });
+        let digest = to_gemini_schema(schema);
+        let variants: Vec<(&str, Value)> = vec![
+            ("plain text", json!({ "contents": contents })),
+            (
+                "+ JSON output",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json" } }),
+            ),
+            (
+                "+ small schema",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": small } }),
+            ),
+            (
+                "+ system prompt",
+                json!({ "systemInstruction": { "parts": [{ "text": "Be brief." }] }, "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": small } }),
+            ),
+            (
+                "+ maxOutputTokens 8192",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": small, "maxOutputTokens": 8192 } }),
+            ),
+            (
+                "digest schema (responseSchema)",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": digest } }),
+            ),
+            (
+                "digest schema (responseJsonSchema)",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseJsonSchema": schema } }),
+            ),
+            (
+                "digest schema without maxItems",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": without(&digest, "maxItems") } }),
+            ),
+            (
+                "digest schema without propertyOrdering",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": without(&digest, "propertyOrdering") } }),
+            ),
+            (
+                "digest schema without enums",
+                json!({ "contents": contents, "generationConfig": { "responseMimeType": "application/json", "responseSchema": without(&without(&digest, "enum"), "format") } }),
+            ),
+        ];
+        let mut out = Vec::new();
+        for (name, body) in variants {
+            out.push((name.to_owned(), self.send_once(&url, &body).await));
+        }
+        let models = match self
+            .http
+            .get(format!("{}/v1beta/models?pageSize=200", self.base_url))
+            .header("x-goog-api-key", &self.key)
+            .send()
+            .await
+        {
+            Ok(r) => {
+                let v: Value = r.json().await.unwrap_or(Value::Null);
+                let names: Vec<String> = v["models"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|m| {
+                        m["name"]
+                            .as_str()?
+                            .strip_prefix("models/")
+                            .map(str::to_owned)
+                    })
+                    .filter(|n| n.contains("flash"))
+                    .collect();
+                format!(
+                    "{} flash models, {} listed: {}",
+                    names.len(),
+                    if names.iter().any(|n| n == model) {
+                        model
+                    } else {
+                        "NOT"
+                    },
+                    names.join(", ")
+                )
+            }
+            Err(e) => format!("no response: {}", error_chain(&e)),
+        };
+        out.push(("models this key can use".into(), models));
+        out
+    }
+}
+
 /// Gemini's schema dialect: uppercase type names, and string enums marked
 /// with `format: "enum"`.
 pub fn to_gemini_schema(s: &Value) -> Value {

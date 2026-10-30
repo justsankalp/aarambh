@@ -16,7 +16,7 @@ use judge::notes::judge_notes;
 
 const DEFAULT_JUDGE_MODEL: &str = "gemini-3.5-flash-lite";
 const DEFAULT_DIGEST_MODEL: &str = "gemini-3.8-flash";
-const USAGE: &str = "usage: judge <notes|digest> [--data DIR] [--max N]";
+const USAGE: &str = "usage: judge <notes|digest|probe> [--data DIR] [--max N]";
 
 fn env(name: &str) -> Option<String> {
     std::env::var(name)
@@ -121,6 +121,30 @@ async fn main() -> ExitCode {
                     ExitCode::FAILURE
                 }
             }
+        }
+        Some("probe") => {
+            // Diagnostics for when Gemini refuses requests (run by the digest
+            // workflow after a failure).
+            let (log, _) = match repo.load_log() {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            let schema = judge::digest::build_prompt(&log, &Default::default(), &[], &repo.taxonomy())
+                .map(|p| p.schema)
+                .unwrap_or_else(|| serde_json::json!({ "type": "object", "properties": { "ok": { "type": "boolean" } } }));
+            for model in [
+                env("DIGEST_MODEL").unwrap_or_else(|| DEFAULT_DIGEST_MODEL.into()),
+                env("JUDGE_MODEL").unwrap_or_else(|| DEFAULT_JUDGE_MODEL.into()),
+            ] {
+                println!("== {model}");
+                for (name, result) in gemini.probe(&model, &schema).await {
+                    println!("{name:40} {result}");
+                }
+            }
+            ExitCode::SUCCESS
         }
         _ => {
             eprintln!("{USAGE}");

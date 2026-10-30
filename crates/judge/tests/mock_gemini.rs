@@ -656,3 +656,42 @@ async fn both_schema_forms_refused_reports_both() {
         }
     );
 }
+
+#[tokio::test]
+async fn the_probe_tries_each_part_and_lists_models() {
+    use wiremock::matchers::body_string_contains;
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "models": [
+            { "name": "models/gemini-test" }, { "name": "models/gemini-9-flash" }
+        ] })))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(body_string_contains("maxOutputTokens"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_json(json!({ "error": { "message": "too many tokens" } })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .respond_with(answer(json!({ "ok": true })))
+        .mount(&server)
+        .await;
+    let g = gemini(&server).await;
+    let schema =
+        json!({ "type": "object", "properties": { "ok": { "type": "boolean", "enum": [true] } } });
+    let results = g.probe(MODEL, &schema).await;
+    assert_eq!(results.len(), 11);
+    let get = |name: &str| {
+        results
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, r)| r.as_str())
+            .unwrap()
+    };
+    assert_eq!(get("plain text"), "ok");
+    assert_eq!(get("+ maxOutputTokens 8192"), "HTTP 400: too many tokens");
+    assert!(get("models this key can use").starts_with("1 flash models, NOT listed"));
+}

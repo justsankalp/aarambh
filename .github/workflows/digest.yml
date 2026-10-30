@@ -39,6 +39,14 @@ jobs:
           DIGEST_MODEL: ${{ vars.DIGEST_MODEL }}
         run: target/tool/judge digest --data data
 
+      - name: Diagnose Gemini (only if the digest failed)
+        if: failure()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIGEST_MODEL: ${{ vars.DIGEST_MODEL }}
+          JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
+        run: target/tool/judge probe --data data
+
       - name: Commit the digest
         run: |
           .github/scripts/commit-data.sh "digest: $(date -u +%F)" data/digests
