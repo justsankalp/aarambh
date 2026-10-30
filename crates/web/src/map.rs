@@ -190,7 +190,8 @@ impl Canvas {
                     Some(IdeaStatus::Parked) => (Some(&pal.bg), Some(&pal.sage)),
                     _ => (Some(&pal.sage), None),
                 },
-                NoteKind::Belief => (Some(&pal.amber), None),
+                // Amber alone is under 3:1 on the light card; the ring isn't.
+                NoteKind::Belief => (Some(&pal.amber), Some(&pal.amber_ink)),
                 NoteKind::Question => (Some(&pal.bg), Some(&pal.ink)),
                 NoteKind::Evidence => (Some(&pal.ink), None),
                 NoteKind::Disagreement => (Some(&pal.bg), Some(&pal.clay)),
