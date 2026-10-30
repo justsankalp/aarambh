@@ -412,6 +412,67 @@ hr.soft {
   border-top: 1px solid var(--line);
 }
 
+/* ---- Week row ---------------------------------------------------------- */
+
+.week {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.week-dots {
+  display: flex;
+  gap: 10px;
+}
+
+.week .day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+}
+
+.dot.one {
+  border-color: var(--amber-ink);
+}
+
+.dot.both {
+  border-color: var(--amber-ink);
+  background: var(--amber);
+}
+
+.week .initial {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.week .today .initial {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.idea-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.idea-count a {
+  color: var(--sage);
+  text-decoration: none;
+}
+
 /* ---- Feed ------------------------------------------------------------- */
 
 .filters {

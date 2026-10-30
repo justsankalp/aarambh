@@ -10,7 +10,7 @@ use leptos::prelude::*;
 use crate::compose::Composer;
 use crate::status::{StatusSheet, status_label};
 use crate::store::{Store, SyncState};
-use crate::util::{clock, day_label, local_ymd, now_ms};
+use crate::util::{clock, day_label, local_day_number, local_ymd, now_ms, weekday_initial};
 use crate::views::SyncLine;
 
 /// What a reference to another note shows.
@@ -312,6 +312,83 @@ fn render_item(
     view! { {head} {row} }
 }
 
+/// Seven dots for the last seven days (amber: both of you wrote; ring: one
+/// of you did), and how many ideas are open and decided. No streaks.
+#[component]
+fn WeekRow() -> impl IntoView {
+    use aarambh_core::momentum::{Dot, week};
+    let store = expect_context::<Store>();
+    let today = local_day_number(now_ms());
+    let dots = Memo::new(move |_| {
+        store.log.with(|l| {
+            let entries: Vec<(i64, String)> = l
+                .newest_first()
+                .take_while(|e| local_day_number(e.ts.0) > today - 7)
+                .filter(|e| e.as_note().is_some())
+                .map(|e| (local_day_number(e.ts.0), e.author.clone()))
+                .collect();
+            week(entries.iter().map(|(d, a)| (*d, a.as_str())), today)
+        })
+    });
+    let ideas = Memo::new(move |_| {
+        store.log.with(|l| {
+            let mut open = 0;
+            let mut decided = 0;
+            for e in l
+                .iter()
+                .filter(|e| e.as_note().is_some_and(|n| n.kind == NoteKind::Idea))
+            {
+                match l.status_of(e.id) {
+                    IdeaStatus::Active => open += 1,
+                    IdeaStatus::Decided => decided += 1,
+                    _ => {}
+                }
+            }
+            (open, decided)
+        })
+    });
+    let summary = move || {
+        let d = dots.get();
+        let both = d.iter().filter(|x| **x == Dot::Both).count();
+        let one = d.iter().filter(|x| **x == Dot::One).count();
+        format!("Last 7 days: both of you wrote on {both}, one of you on {one}.")
+    };
+    view! {
+        <div class="week">
+            <div class="week-dots" role="img" aria-label=summary>
+                {move || {
+                    dots.get()
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, d)| {
+                            let day = today - 6 + i as i64;
+                            let class = match d {
+                                Dot::Both => "dot both",
+                                Dot::One => "dot one",
+                                Dot::Nobody => "dot none",
+                            };
+                            view! {
+                                <span class="day" class:today=i == 6>
+                                    <span class=class></span>
+                                    <span class="initial" aria-hidden="true">{weekday_initial(day)}</span>
+                                </span>
+                            }
+                        })
+                        .collect_view()
+                }}
+            </div>
+            {move || {
+                let (open, decided) = ideas.get();
+                (open + decided > 0).then(|| view! {
+                    <p class="idea-count">
+                        <a href="#map">{format!("{open} open")}</a>" · "{format!("{decided} decided")}
+                    </p>
+                })
+            }}
+        </div>
+    }
+}
+
 #[component]
 pub fn NotesView() -> impl IntoView {
     let store = expect_context::<Store>();
@@ -334,6 +411,7 @@ pub fn NotesView() -> impl IntoView {
     view! {
         <SyncLine />
         <Show when=has_notes>
+            <WeekRow />
             <FilterBar filter=filter />
         </Show>
         {move || notice.get().map(|n| view! {

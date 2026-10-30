@@ -90,3 +90,15 @@ pub fn ago(ms: u64, now: u64) -> String {
         _ => format!("{} h ago", mins / 60),
     }
 }
+
+/// Days since the epoch in the device's time zone (DST-aware), for grouping
+/// by the person's own calendar days.
+pub fn local_day_number(ms: u64) -> i64 {
+    let offset_min = local_date(ms).get_timezone_offset();
+    ((ms as f64 - offset_min * 60_000.0) / 86_400_000.0).floor() as i64
+}
+
+/// One-letter weekday for a local day number (1970-01-01 was a Thursday).
+pub fn weekday_initial(day: i64) -> &'static str {
+    ["T", "F", "S", "S", "M", "T", "W"][day.rem_euclid(7) as usize]
+}
