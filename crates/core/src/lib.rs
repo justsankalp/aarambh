@@ -1,6 +1,7 @@
 //! Shared types and pure logic for aarambh. Builds for native and wasm32.
 
 pub mod event;
+pub mod feed;
 pub mod id;
 pub mod judgment;
 pub mod log;
