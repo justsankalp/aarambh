@@ -99,10 +99,10 @@ mod tests {
 
     #[test]
     fn parses_repo_names_and_urls() {
-        let want = Some(RepoRef {
+        let want = RepoRef {
             owner: "justsankalp".into(),
             name: "aarambh".into(),
-        });
+        };
         for s in [
             "justsankalp/aarambh",
             "  justsankalp/aarambh  ",
@@ -110,10 +110,10 @@ mod tests {
             "https://github.com/justsankalp/aarambh/",
             "github.com/justsankalp/aarambh.git",
         ] {
-            assert_eq!(RepoRef::parse(s), want, "{s}");
+            assert_eq!(RepoRef::parse(s).as_ref(), Some(&want), "{s}");
         }
         assert_eq!(
-            want.unwrap().api_base(),
+            want.api_base(),
             "https://api.github.com/repos/justsankalp/aarambh"
         );
     }
